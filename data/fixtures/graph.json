@@ -1,0 +1,36 @@
+{
+  "me": { "id": "me", "name": "Sample Person" },
+  "contexts": [
+    { "id": "family", "name": "Family", "parent": "me" },
+    { "id": "school", "name": "High school", "parent": "me", "years": "2009–2014" },
+    { "id": "military", "name": "Military", "parent": "me", "years": "2015–2026" },
+    { "id": "unit-a", "name": "Unit A", "parent": "military" },
+    { "id": "university", "name": "University", "parent": "me", "years": "2015–2019" },
+    { "id": "mba", "name": "Business school", "parent": "me", "years": "2026–2028" },
+    { "id": "section-b", "name": "Section B", "parent": "mba" },
+    { "id": "study-group-4", "name": "Study group 4", "parent": "section-b" },
+    { "id": "veterans-club", "name": "Veterans Club", "parent": "mba" },
+    { "id": "aerospace-defense-club", "name": "Aerospace & Defense Club", "parent": "mba" },
+    { "id": "orientation", "name": "Orientation", "parent": "mba" },
+    { "id": "industry", "name": "Industry", "parent": "me" }
+  ],
+  "people": [
+    { "id": "partner", "name": "Partner", "contexts": ["family", "university"], "closeness": 1 },
+    { "id": "parent-a", "name": "Parent A", "contexts": ["family"], "closeness": 1 },
+    { "id": "parent-b", "name": "Parent B", "contexts": ["family"], "closeness": 1 },
+    { "id": "sibling", "name": "Sibling", "contexts": ["family", "military"], "closeness": 1 },
+    { "id": "school-friend", "name": "School Friend", "contexts": ["school"], "closeness": 2 },
+    { "id": "wei-jie-lim", "name": "Wei Jie Lim", "contexts": ["unit-a"], "closeness": 2, "lastContact": "2026-09-30" },
+    { "id": "kelvin-ong", "name": "Kelvin Ong", "contexts": ["military"], "closeness": 3, "lastContact": "2026-08-19" },
+    { "id": "ryan-koh", "name": "Ryan Koh", "contexts": ["military", "mba"], "closeness": 3, "notes": "Now at MBA '27" },
+    { "id": "emily-novak", "name": "Emily Novak", "contexts": ["university"], "closeness": 2, "org": "Apple", "lastContact": "2026-09-14" },
+    { "id": "chris-patel", "name": "Chris Patel", "contexts": ["university"], "closeness": 3, "org": "Nvidia" }
+  ],
+  "links": [
+    { "a": "me", "b": "partner", "kind": "partner" },
+    { "a": "parent-a", "b": "parent-b", "kind": "partner" },
+    { "a": "ryan-koh", "b": "ethan-park", "kind": "knows" },
+    { "a": "emily-novak", "b": "hannah-lee", "kind": "knows" },
+    { "a": "chris-patel", "b": "ravi-kumar", "kind": "knows" }
+  ]
+}

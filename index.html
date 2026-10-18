@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Network Scope</title>
+  <meta name="description" content="Map your network privately in your browser: import LinkedIn, contacts, WhatsApp and more. Nothing leaves your device." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <header class="bar">
+      <div class="brand"><span class="mark" aria-hidden="true"></span><h1>Network Scope</h1><span id="sample-badge" class="badge" hidden></span></div>
+      <div class="controls">
+        <label class="search"><span class="sr">Search people</span><input id="search" type="search" placeholder="Search name, company, group" autocomplete="off" /></label>
+        <div class="seg" role="group" aria-label="View"><button data-view="graph" aria-pressed="true">Graph</button><button data-view="scope" aria-pressed="false">Scope</button><button data-view="sort" aria-pressed="false">Sort</button><button data-view="data" aria-pressed="false">Data</button></div>
+        <div id="circles" class="filters" role="group" aria-label="Show worlds"></div>
+        <button id="attention" class="toggle" aria-pressed="false">Needs attention</button>
+        <button id="motion" class="icon-btn" aria-pressed="true" title="Toggle sweep">Sweep</button>
+        <button id="theme" class="icon-btn" title="Toggle light or dark">Theme</button>
+      </div>
+    </header>
+    <main class="stage">
+      <div id="graph" class="scope-host"></div>
+      <div id="scope" class="scope-host" hidden></div>
+      <div id="sort" class="sort-host" hidden></div>
+      <div id="data" class="sort-host" hidden></div>
+      <div class="legend" aria-hidden="true">
+        <div class="graph-only"><i class="lg-world"></i>World</div>
+        <div class="graph-only"><i class="lg-diamond"></i>Unit, cohort or group</div>
+        <div><i class="lg-dot"></i>Person: brighter = more recent</div>
+        <div><i class="lg-dot never"></i>Not met yet</div>
+        <div><i class="lg-dot alert"></i>Amber ring = needs attention</div>
+        <div class="graph-only"><i class="lg-line solid"></i>Partner / family</div>
+        <div><i class="lg-line"></i>Intro / warm path</div>
+      </div>
+      <button id="reset" class="reset" title="Reset zoom">Reset view</button>
+    </main>
+    <aside id="panel" class="panel" aria-live="polite"></aside>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

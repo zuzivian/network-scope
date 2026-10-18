@@ -1,0 +1,19 @@
+[
+  { "Name": "Alex Moreno", "Status": "Regular Contact", "Last Met": "2026-10-09", "Last Touchpoint": "2026-10-11", "Follow Up": "", "Follow-up Date": null, "Where Met": "Study group 4" },
+  { "Name": "Chloe Dubois", "Status": "Regular Contact", "Last Met": "2026-10-10", "Last Touchpoint": "2026-10-10", "Follow Up": "", "Follow-up Date": null, "Where Met": "Study group 4" },
+  { "Name": "Sam Adeyemi", "Status": "Regular Contact", "Last Met": "2026-08-20", "Last Touchpoint": "2026-08-22", "Follow Up": "Catch up over lunch", "Follow-up Date": null, "Where Met": "Study group 4" },
+  { "Name": "Rina Takahashi", "Status": "Regular Contact", "Last Met": "2026-10-06", "Last Touchpoint": "2026-10-08", "Follow Up": "", "Follow-up Date": null, "Where Met": "Section B" },
+  { "Name": "Ben Carter", "Status": "Following Up", "Last Met": "2026-09-22", "Last Touchpoint": "2026-09-23", "Follow Up": "Send Skydio contact", "Follow-up Date": "2026-10-03", "Where Met": "Section B" },
+  { "Name": "Isabel Ortiz", "Status": "Met Once", "Last Met": "2026-09-28", "Last Touchpoint": "2026-09-28", "Follow Up": "", "Follow-up Date": null, "Where Met": "Section B" },
+  { "Name": "Noah Fischer", "Status": "Met Once", "Last Met": "2026-09-19", "Last Touchpoint": "2026-09-19", "Follow Up": "", "Follow-up Date": null, "Where Met": "Section B" },
+  { "Name": "Aisha Bello", "Status": "Not Yet Met", "Last Met": null, "Last Touchpoint": null, "Follow Up": "", "Follow-up Date": null, "Where Met": "Section B" },
+  { "Name": "Marco Rossi", "Status": "Not Yet Met", "Last Met": null, "Last Touchpoint": null, "Follow Up": "", "Follow-up Date": null, "Where Met": "Section B" },
+  { "Name": "Jake Sullivan", "Status": "Regular Contact", "Last Met": "2026-10-07", "Last Touchpoint": "2026-10-07", "Follow Up": "", "Follow-up Date": null, "Where Met": "Veterans Club" },
+  { "Name": "Dana Whitfield", "Status": "Following Up", "Last Met": "2026-09-25", "Last Touchpoint": "2026-09-25", "Follow Up": "Swap notes on defense-tech list", "Follow-up Date": "2026-10-14", "Where Met": "Veterans Club" },
+  { "Name": "Lucas Brandt", "Status": "Following Up", "Last Met": "2026-09-12", "Last Touchpoint": "2026-09-14", "Follow Up": "Ask about his Anduril contact", "Follow-up Date": null, "Where Met": "Aerospace & Defense Club" },
+  { "Name": "Mei Lin", "Status": "Met Once", "Last Met": "2026-10-04", "Last Touchpoint": "2026-10-04", "Follow Up": "", "Follow-up Date": null, "Where Met": "Aerospace & Defense Club" },
+  { "Name": "Omar Haddad", "Status": "Not Yet Met", "Last Met": null, "Last Touchpoint": null, "Follow Up": "", "Follow-up Date": null, "Where Met": "Aerospace & Defense Club" },
+  { "Name": "Tara Singh", "Status": "Met Once", "Last Met": "2026-09-05", "Last Touchpoint": "2026-09-05", "Follow Up": "", "Follow-up Date": null, "Where Met": "Orientation" },
+  { "Name": "Felix Wagner", "Status": "Not Yet Met", "Last Met": null, "Last Touchpoint": null, "Follow Up": "", "Follow-up Date": null, "Where Met": "Orientation" },
+  { "Name": "Zoe Kim", "Status": "Met Once", "Last Met": "2026-09-08", "Last Touchpoint": "2026-09-10", "Follow Up": "", "Follow-up Date": null, "Where Met": "Orientation" }
+]

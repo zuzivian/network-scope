@@ -1,0 +1,19 @@
+node_modules
+dist
+# Real CRM pulls stay local. Only the fictional fixtures are committed.
+data/notion/*.json
+data/graph.json
+data/imported.json
+data/import-review.md
+data/tag-map.json
+data/contacts.json
+data/assignments.json
+data/.sync-token
+data/leak-terms.txt
+data/linkedin/
+data/linkedin.json
+data/linkedin-contacts.json
+data/linkedin-review.md
+.vercel
+data/sort-config.json
+*.local.md

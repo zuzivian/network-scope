@@ -1,0 +1,7 @@
+# Nothing personal is ever uploaded to Vercel: only code and the fictional sample data.
+/data/*
+!/data/fixtures
+/dist
+/node_modules
+/.claude
+/scripts/import_*.py
