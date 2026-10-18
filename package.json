@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "build:public": "tsc --noEmit && vite build --mode public",
-    "check:public": "sh scripts/check-public.sh"
+    "check:public": "sh scripts/check-public.sh",
+    "export:live": "vite-node scripts/export-live.ts"
   },
   "dependencies": {
     "@types/d3-drag": "^3.0.7",

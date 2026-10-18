@@ -65,7 +65,7 @@ async function boot() {
   // The Data screen always manages the browser workspace (or the local files), even while the sample is showing.
   mountDataView($('data'), {
     mode: mode === 'local' ? 'local' : 'browser', ws, hasLocalData,
-    localGraph: () => localSources()?.graph.data ?? null,
+    localSources,
     markDirty: () => { dirty = true; },
     reload,
     show: (v) => store.set({ view: v as View }),

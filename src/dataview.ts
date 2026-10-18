@@ -3,10 +3,10 @@
 import { unzipSync, strFromU8 } from 'fflate';
 import { csvToResult, importFile } from './importers';
 import type { CsvMapping, CsvPreset, ImportResult } from './importers/types';
-import type { GraphFile } from './model';
+import type { Sources } from './model';
 import {
   clearWorkspace, defaultWorldName, discoveredTags, effectiveContexts, exportWorkspace, mergeImport, parseWorkspace,
-  pruneContexts, removeImport, saveWorkspace, storageAvailable, workspaceFromGraph, type Workspace,
+  pruneContexts, removeImport, saveWorkspace, storageAvailable, workspaceFromSources, type Workspace,
 } from './workspace';
 
 export type Mode = 'local' | 'browser' | 'demo';
@@ -15,7 +15,7 @@ export interface DataViewEnv {
   mode: Mode;
   ws: Workspace;
   hasLocalData: boolean;
-  localGraph: () => GraphFile | null;
+  localSources: () => Sources | null;
   /** Called after anything that changes the graph, so the app can rebuild before showing it. */
   markDirty: () => void;
   reload: (view?: string) => void;
@@ -404,11 +404,11 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
       return env.reload('data');
     }
     if (b('[data-copy-local]')) {
-      const g = env.localGraph();
-      if (!g) return;
+      const src = env.localSources();
+      if (!src) return;
       const existing = ws.people.length;
       if (existing && !confirm(`Replace the ${existing} people already in this browser workspace?`)) return;
-      Object.assign(ws, workspaceFromGraph(g, 'Local files (data/)'));
+      Object.assign(ws, workspaceFromSources(src));
       await saveWorkspace(ws);
       try { localStorage.setItem('ns-source', 'browser'); } catch { /* ignore */ }
       return env.reload('graph');

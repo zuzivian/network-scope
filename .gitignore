@@ -1,6 +1,11 @@
 node_modules
 dist
-# Real CRM pulls stay local. Only the fictional fixtures are committed.
+# Everything personal stays local: only the fictional fixtures under data/ are committed.
+data/*
+!data/fixtures/
+!data/notion/
+data/notion/*
+!data/notion/.gitkeep
 data/notion/*.json
 data/graph.json
 data/imported.json

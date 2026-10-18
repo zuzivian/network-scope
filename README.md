@@ -46,6 +46,8 @@ Colour does one job (recency, plus amber for attention); worlds are shown by str
 
 If `data/graph.json` exists (gitignored), `npm run dev` reads your own files instead of the browser workspace: a hand-built graph plus importer outputs (`scripts/import_whatsapp.py` for WhatsApp Desktop's local databases, read-only; `scripts/import_linkedin.py` for LinkedIn). The Data screen's **Source** switch flips between local files and a browser workspace. Sort decisions save to `data/assignments.json` through a dev-only endpoint.
 
+**Use your local network on the live site:** `npm run export:live` writes a backup file to `data/export/` (gitignored), with your graph, importer overlays and CRM tracker rows. Open the site, then **Data → Restore a backup**. The file is read in your browser and kept in that browser's storage only.
+
 **Nothing under `data/` ships or gets committed**, except the fictional sample in `data/fixtures/`. `vite build --mode public` swaps `src/local-data.ts` for an empty stub, and `npm run check:public` builds that bundle and scans it for every term in `data/leak-terms.txt` and every real name in your local graph files.
 
 ## Deploy

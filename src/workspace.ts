@@ -22,6 +22,9 @@ export interface WorkspacePerson {
   status?: string;
   notes?: string;
   url?: string;
+  tier?: number;
+  followUp?: string;
+  nextAction?: string;
   /** Import ids this person came from. */
   sources: string[];
 }
@@ -38,8 +41,12 @@ export interface Workspace {
   tagRules: Record<string, string[]>;
   decisions: Record<string, Decision>;
   imports: { id: string; kind: ImportKind | 'workspace'; source: string; at: string; people: number }[];
+  /** CRM tracker rows and their matching rules, carried over from local files (see workspaceFromSources). */
+  crm?: { networking: Row[]; classmates: Row[]; encounters: Row[]; rules: Sources['rules'] };
   updatedAt: string;
 }
+
+type Row = Record<string, unknown>;
 
 export function emptyWorkspace(name = 'Me'): Workspace {
   return { version: 1, me: { id: 'me', name }, contexts: [], people: [], links: [], tagRules: {}, decisions: {}, imports: [], updatedAt: new Date().toISOString() };
@@ -230,7 +237,7 @@ export function toSources(ws: Workspace): Sources {
     .filter((p) => !ws.decisions[p.id]?.exclude)
     .map((p) => ({
       id: p.id, name: p.name, contexts: effectiveContexts(ws, p), closeness: p.closeness, met: p.met,
-      org: p.org, role: p.role ?? p.rank, lastContact: p.lastContact,
+      org: p.org, role: p.role ?? p.rank, lastContact: p.lastContact, tier: p.tier, followUp: p.followUp, nextAction: p.nextAction,
       notes: [p.notes, p.connectedOn ? `Connected ${p.connectedOn}.` : '', p.url ?? ''].filter(Boolean).join(' ') || undefined,
       sources: p.sources.map((s) => label.get(s) ?? 'Import'),
     }));
@@ -238,10 +245,10 @@ export function toSources(ws: Workspace): Sources {
   return {
     graph: { data: graph, sample: false },
     imports: ws.imports.map((i) => ({ name: i.source, rows: i.people })),
-    networking: { rows: [], sample: false },
-    classmates: { rows: [], sample: false },
-    encounters: [],
-    rules: { aliases: {}, whereMet: [] },
+    networking: { rows: ws.crm?.networking ?? [], sample: false },
+    classmates: { rows: ws.crm?.classmates ?? [], sample: false },
+    encounters: ws.crm?.encounters ?? [],
+    rules: ws.crm?.rules ?? { aliases: {}, whereMet: [] },
   };
 }
 
@@ -273,17 +280,36 @@ export function parseWorkspace(text: string): Workspace {
   return ws;
 }
 
-/** Local mode only: copy the files-based graph into a browser workspace (stays on this machine). */
-export function workspaceFromGraph(g: GraphFile, source: string): Workspace {
+/**
+ * Local mode only: turn your local files (graph, importer overlays, CRM trackers) into a browser
+ * workspace, so the same network works on the public site. Each source label becomes an import.
+ * The result goes into a backup file on your own disk; nothing is sent anywhere.
+ */
+export function workspaceFromSources(src: Sources): Workspace {
+  const g = src.graph.data;
   const ws = emptyWorkspace(g.me.name);
   const meId = g.me.id;
+  const at = new Date().toISOString();
   ws.contexts = g.contexts.map((c) => ({ ...c, parent: c.parent === meId ? 'me' : c.parent }));
-  const importId = `workspace-${Date.now().toString(36)}`;
-  ws.people = g.people.map((p) => ({
-    id: p.id, name: p.name, contexts: p.contexts, closeness: p.closeness ?? 3, met: p.met ?? true, org: p.org, role: p.role,
-    tags: [], lastContact: p.lastContact, notes: p.notes, sources: [importId],
-  }));
+  const importFor = new Map<string, string>();
+  const idFor = (label: string) => {
+    let id = importFor.get(label);
+    if (!id) {
+      id = `workspace-${slug(label) || 'local'}`;
+      importFor.set(label, id);
+      ws.imports.push({ id, kind: 'workspace', source: label, at, people: 0 });
+    }
+    return id;
+  };
+  ws.people = g.people.map((p) => {
+    const sources = (p.sources?.length ? p.sources : [src.graph.label ?? 'Local files']).map(idFor);
+    return {
+      id: p.id, name: p.name, contexts: p.contexts, closeness: p.closeness ?? 3, met: p.met ?? true, org: p.org, role: p.role,
+      tags: [], lastContact: p.lastContact, notes: p.notes, tier: p.tier, followUp: p.followUp, nextAction: p.nextAction, sources,
+    };
+  });
+  for (const i of ws.imports) i.people = ws.people.filter((p) => p.sources.includes(i.id)).length;
   ws.links = g.links.map((l) => ({ ...l, a: l.a === meId ? 'me' : l.a, b: l.b === meId ? 'me' : l.b }));
-  ws.imports.push({ id: importId, kind: 'workspace', source, at: new Date().toISOString(), people: ws.people.length });
+  ws.crm = { networking: src.networking.rows, classmates: src.classmates.rows, encounters: src.encounters, rules: src.rules };
   return ws;
 }
