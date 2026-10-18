@@ -101,15 +101,15 @@ function labelBox(p: Placed, left: boolean): Box {
   return { x0, y0: p.y - 7, x1: x0 + w, y1: p.y + 7 };
 }
 
-/** Greedy: closest and flagged people claim label space first; anything that would collide waits for hover/zoom. */
+/** Greedy: closest people claim label space first; anything that would collide waits for hover/zoom. */
 function placeLabels(placed: Placed[], meR: number) {
   const dots: Box[] = placed.map((p) => ({ x0: p.x - p.size - 1, y0: p.y - p.size - 1, x1: p.x + p.size + 1, y1: p.y + p.size + 1 }));
   const me: Box = { x0: -meR, y0: -meR, x1: meR, y1: meR };
   const taken: Box[] = [];
   const order = placed
     .map((p, i) => ({ p, i }))
-    .filter(({ p }) => p.node.ring <= 2 || p.node.flags.length > 0 || p.node.tier === 1)
-    .sort((a, b) => a.p.node.ring - b.p.node.ring || b.p.node.flags.length - a.p.node.flags.length || (a.p.node.tier ?? 9) - (b.p.node.tier ?? 9));
+    .filter(({ p }) => p.node.ring <= 2 || p.node.tier === 1)
+    .sort((a, b) => a.p.node.ring - b.p.node.ring || (a.p.node.tier ?? 9) - (b.p.node.tier ?? 9));
   for (const { p, i } of order) {
     for (const left of [p.labelLeft, !p.labelLeft]) {
       const box = labelBox(p, left);

@@ -5,12 +5,13 @@ import { demoSources } from './demo';
 import { mountGraph, type GraphView } from './graph';
 import { hasLocalData, localContacts, localSortStore, localSources } from './local-data';
 import { buildNetwork, type Sources } from './model';
-import { renderPanel } from './panel';
+import { bindPanelCopy, renderPanel } from './panel';
 import { mountScope, type Scope } from './scope';
 import { mountSort, type SortView } from './sort';
 import { createStore, type View } from './state';
+import { mountFeedback } from './feedback';
 import { mountTips } from './tips';
-import { exportWorkspace, loadWorkspace, toSources, workspaceContacts } from './workspace';
+import { downloadBackup, loadWorkspace, protectStorage, toSources, workspaceContacts } from './workspace';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
@@ -36,11 +37,13 @@ async function boot() {
   const sources: Sources = mode === 'demo' ? demoSources() : mode === 'local' ? localSources()! : toSources(ws);
 
   const net = buildNetwork(sources);
+  if (mode === 'browser') await protectStorage();
   const qView = params.get('view') as View | null;
   const initialView: View = qView && VIEWS.includes(qView) && !(mode === 'demo' && qView === 'sort') ? qView : 'graph';
-  const store = createStore({ selected: null, hidden: new Set<string>(), query: '', attentionOnly: false, view: initialView });
+  const store = createStore({ selected: null, hidden: new Set<string>(), query: '', view: initialView });
   const select = (id: string | null) => store.set({ selected: id });
   const panel = $('panel');
+  bindPanelCopy(panel, () => net);
 
   // Mode badge
   const badge = $('sample-badge');
@@ -80,14 +83,7 @@ async function boot() {
   const tips = mountTips($('tip'), {
     mode, net, ws,
     act(a) {
-      if (a === 'attention') return store.set({ attentionOnly: true });
-      if (a === 'backup') {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(exportWorkspace(ws));
-        link.download = `network-scope-backup-${new Date().toISOString().slice(0, 10)}.json`;
-        link.click();
-        return setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      }
+      if (a === 'backup') return void downloadBackup(ws);
       store.set({ view: a });
     },
   });
@@ -115,7 +111,6 @@ async function boot() {
       store.set({ view: v });
     }));
   $<HTMLInputElement>('search').addEventListener('input', (e) => store.set({ query: (e.target as HTMLInputElement).value }));
-  $('attention').addEventListener('click', () => store.set({ attentionOnly: !store.get().attentionOnly }));
   $('reset').addEventListener('click', () => (store.get().view === 'graph' ? graph.resetView() : scope?.resetView()));
 
   panel.addEventListener('click', (e) => {
@@ -154,8 +149,8 @@ async function boot() {
       b.disabled = mode === 'demo' && b.dataset.view === 'sort';
       if (b.disabled) b.title = 'Sort works on your own map';
     });
-    $('attention').setAttribute('aria-pressed', String(s.attentionOnly));
   });
 }
 
+mountFeedback($('feedback-btn'), $<HTMLDialogElement>('feedback'));
 boot();

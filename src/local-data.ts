@@ -22,7 +22,7 @@ function rows(real: string, fixture: string) {
 
 /**
  * Lay an imported graph (e.g. from WhatsApp) over the vault graph.
- * Same id = same person: contexts are unioned, vault fields win, the latest contact date wins.
+ * Same id = same person: contexts are unioned and vault fields win.
  */
 function overlay(base: GraphFile, extra: GraphFile, source: string): GraphFile {
   const contexts = [...base.contexts];
@@ -33,11 +33,9 @@ function overlay(base: GraphFile, extra: GraphFile, source: string): GraphFile {
   for (const p of extra.people) {
     const prev = people.get(p.id);
     if (!prev) { people.set(p.id, { ...p, sources: [source] }); continue; }
-    const last = [prev.lastContact, p.lastContact].filter(Boolean).sort().pop();
     people.set(p.id, {
       ...p, ...prev,
       contexts: [...new Set([...prev.contexts, ...p.contexts])],
-      lastContact: last,
       sources: [...new Set([...(prev.sources ?? []), source])],
     });
   }

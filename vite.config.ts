@@ -4,9 +4,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
-const ASSIGNMENTS = resolve(__dirname, 'data/assignments.json');
-const SYNC_TOKEN = resolve(__dirname, 'data/.sync-token');
-const LINKEDIN_CSV = resolve(__dirname, 'data/linkedin/connections.csv');
+const ASSIGNMENTS = resolve(import.meta.dirname, 'data/assignments.json');
+const SYNC_TOKEN = resolve(import.meta.dirname, 'data/.sync-token');
+const LINKEDIN_CSV = resolve(import.meta.dirname, 'data/linkedin/connections.csv');
 const NOTION_FILES: Record<string, string> = {
   networking: 'data/notion/networking-tracker.json',
   classmates: 'data/notion/classmate-network.json',
@@ -64,7 +64,7 @@ function sortApi(): Plugin {
           const file = NOTION_FILES[data.name];
           if (!file || !Array.isArray(data.rows)) return send(res, 400, { error: 'unknown table' });
           const rows = data.rows.map((r: Record<string, unknown>) => Object.fromEntries(Object.entries(r).filter(([k]) => !DROP_FIELDS.has(k))));
-          writeFileSync(resolve(__dirname, file), JSON.stringify(rows, null, 1));
+          writeFileSync(resolve(import.meta.dirname, file), JSON.stringify(rows, null, 1));
           return send(res, 200, { ok: true, rows: rows.length });
         } catch (e) {
           return send(res, 400, { error: String(e) });
@@ -76,7 +76,7 @@ function sortApi(): Plugin {
         const cmd = existsSync(LINKEDIN_CSV)
           ? 'python3 -I scripts/import_whatsapp.py && python3 -I scripts/import_linkedin.py'
           : 'python3 -I scripts/import_whatsapp.py';
-        execFile('sh', ['-c', cmd], { cwd: __dirname, timeout: 120_000 }, (err, stdout, stderr) => {
+        execFile('sh', ['-c', cmd], { cwd: import.meta.dirname, timeout: 120_000 }, (err, stdout, stderr) => {
           if (err) return send(res, 500, { error: stderr || String(err) });
           const appliedAt = new Date().toISOString();
           if (existsSync(ASSIGNMENTS)) {
@@ -91,12 +91,12 @@ function sortApi(): Plugin {
 }
 
 /**
- * Public build only: a Content-Security-Policy with connect-src 'none', so the browser itself
- * refuses any request that could carry imported data off the device (vercel.json sends the
- * same policy as a header, plus frame-ancestors).
+ * Public build only: a Content-Security-Policy whose connect-src allows only the feedback form,
+ * so the browser itself refuses any other request that could carry imported data off the device
+ * (vercel.json sends the same policy as a header, plus frame-ancestors).
  */
 export const PUBLIC_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-  + "font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'";
+  + "font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https://formspree.io; form-action 'none'; base-uri 'none'; object-src 'none'";
 
 function publicCsp(): Plugin {
   return {
@@ -109,7 +109,7 @@ function publicCsp(): Plugin {
 export default defineConfig(({ mode }) => ({
   // The public build must never bundle data/ (Nat's real network): swap in an empty loader.
   resolve: mode === 'public'
-    ? { alias: [{ find: /^\.\/local-data$/, replacement: resolve(__dirname, 'src/local-data.stub.ts') }] }
+    ? { alias: [{ find: /^\.\/local-data$/, replacement: resolve(import.meta.dirname, 'src/local-data.stub.ts') }] }
     : {},
   plugins: mode === 'public' ? [publicCsp()] : [sortApi()],
   // Saving a decision must not reload the page mid-sort.

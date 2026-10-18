@@ -4,9 +4,9 @@ import type { Network } from './model';
 import type { State } from './state';
 import { effectiveContexts, type Workspace } from './workspace';
 
-export type TipAction = 'data' | 'sort' | 'scope' | 'attention' | 'backup';
+export type TipAction = 'data' | 'sort' | 'scope' | 'backup';
 
-interface Ctx { mode: 'demo' | 'browser' | 'local'; net: Network; ws: Workspace; bridges: number; flagged: number; unplaced: number }
+interface Ctx { mode: 'demo' | 'browser' | 'local'; net: Network; ws: Workspace; bridges: number; unplaced: number }
 
 interface Tip {
   id: string;
@@ -41,11 +41,6 @@ const TIPS: Tip[] = [
     body: (c) => `<b>${plural(c.bridges, 'bridge')}</b> connect two of these worlds. They’re listed on the right, and they’re often your best route to an intro.`,
   },
   {
-    id: 'demo-attention', when: (c) => c.mode === 'demo' && c.flagged > 0,
-    body: (c) => `<b>Amber rings</b> mark ${plural(c.flagged, 'person', 'people')} to get back to: a follow-up is due, a thank-you is owed, or it’s gone quiet.`,
-    actions: [{ label: 'Show only them', do: 'attention' }],
-  },
-  {
     id: 'demo-own', when: (c) => c.mode === 'demo' && !c.ws.people.length,
     body: () => 'That’s the tour. Ready to see your own network?',
     actions: [{ label: 'Make my map', do: 'data' }],
@@ -57,6 +52,11 @@ const TIPS: Tip[] = [
       const groups = c.net.contexts.filter((x) => x.depth > 1).length;
       return `${plural(c.net.people.length, 'person', 'people')}${groups ? ` in ${plural(groups, 'group')}` : ''}. Click a dot to see who someone is, or search above.`;
     },
+  },
+  {
+    id: 'own-backup', when: (c) => c.mode === 'browser' && !c.ws.lastBackupAt,
+    body: () => 'Your map lives only in this browser, which can clear it (Safari does after 7 days without a visit). <b>Download a backup</b> to keep it safe and to move it to another device.',
+    actions: [{ label: 'Download a backup', do: 'backup' }],
   },
   {
     id: 'own-travel', when: (c) => c.mode === 'browser',
@@ -73,19 +73,9 @@ const TIPS: Tip[] = [
     actions: [{ label: 'Open Sort', do: 'sort' }],
   },
   {
-    id: 'own-attention', when: (c) => c.mode === 'browser' && c.flagged > 0,
-    body: (c) => `<b>Amber rings</b> mark ${plural(c.flagged, 'person', 'people')} to get back to.`,
-    actions: [{ label: 'Show only them', do: 'attention' }],
-  },
-  {
     id: 'own-scope', when: (c) => c.mode === 'browser',
     body: () => 'Try <b>Scope</b>: the same people on a radar, with the closest at the centre.',
     actions: [{ label: 'Show Scope', do: 'scope' }],
-  },
-  {
-    id: 'own-backup', when: (c) => c.mode === 'browser' && c.ws.imports.length >= 2,
-    body: () => 'Your map lives only in this browser. A backup keeps it safe, and moves it to another device.',
-    actions: [{ label: 'Download a backup', do: 'backup' }],
   },
 ];
 
@@ -114,7 +104,6 @@ export function mountTips(host: HTMLElement, env: TipsEnv) {
   const ctx: Ctx = {
     mode: env.mode, net: env.net, ws: env.ws,
     bridges: env.net.people.filter((p) => p.worlds.length > 1).length,
-    flagged: env.net.people.filter((p) => p.flags.length).length,
     unplaced: env.ws.people.filter((p) => effectiveContexts(env.ws, p).every((c) => worlds.has(c))).length,
   };
   let current: Tip | undefined;

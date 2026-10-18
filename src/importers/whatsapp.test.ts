@@ -19,12 +19,11 @@ const IOS = [
 describe('parseWhatsAppChat iOS', () => {
   const r = parseWhatsAppChat(IOS, 'WhatsApp Chat - Squad 12.txt');
 
-  it('collects last message date per sender (day-first)', () => {
+  it('collects senders and keeps no timestamps', () => {
     expect(r.kind).toBe('whatsapp');
     expect(r.source).toBe('WhatsApp: Squad 12');
-    const alex = r.people.find((p) => p.name === 'Alex Moreno');
-    expect(alex?.lastContact).toBe('2026-10-16');
-    expect(r.people.find((p) => p.name === 'Sam Lee')?.lastContact).toBe('2026-10-14');
+    expect(r.people.map((p) => p.name)).toEqual(expect.arrayContaining(['Alex Moreno', 'Sam Lee']));
+    expect(JSON.stringify(r)).not.toMatch(/2026/);
   });
 
   it('adds a group with all senders and added members', () => {
@@ -32,7 +31,6 @@ describe('parseWhatsAppChat iOS', () => {
     expect(r.groups[0].name).toBe('Squad 12');
     expect(r.groups[0].members).toEqual(expect.arrayContaining(['Alex Moreno', 'Sam Lee', 'Priya Nair']));
     expect(r.people.every((p) => p.groups.includes('Squad 12'))).toBe(true);
-    expect(r.people.find((p) => p.name === 'Priya Nair')?.lastContact).toBeUndefined();
   });
 
   it('skips phone-number senders and counts them', () => {
@@ -60,22 +58,21 @@ describe('parseWhatsAppChat Android', () => {
     const r = parseWhatsAppChat(text, 'WhatsApp Chat with Alex Rivera.txt');
     expect(r.source).toBe('WhatsApp: Alex Rivera');
     expect(r.groups).toEqual([]);
-    expect(r.people.find((p) => p.name === 'Alex Rivera')?.lastContact).toBe('2026-10-14');
+    expect(r.people.map((p) => p.name).sort()).toEqual(['Alex Moreno', 'Alex Rivera']);
     expect(r.people.find((p) => p.name === 'Alex Moreno')?.groups).toEqual([]);
   });
 
-  it('detects M/D when a second number exceeds 12', () => {
+  it('reads US-style (M/D) lines', () => {
     const text = ['10/13/26, 9:04 PM - Alex Moreno: hi', '10/01/26, 9:04 AM - Sam Lee: yo'].join('\n');
     const r = parseWhatsAppChat(text, 'WhatsApp Chat with Sam Lee.txt');
-    expect(r.people.find((p) => p.name === 'Alex Moreno')?.lastContact).toBe('2026-10-13');
-    expect(r.people.find((p) => p.name === 'Sam Lee')?.lastContact).toBe('2026-10-01');
+    expect(r.people.map((p) => p.name).sort()).toEqual(['Alex Moreno', 'Sam Lee']);
   });
 
-  it('detects D/M when a first number exceeds 12 and defaults to D/M', () => {
+  it('reads day-first (D/M) lines', () => {
     const a = parseWhatsAppChat('13/10/2026, 21:04 - A One: x\n', 'WhatsApp Chat with A One.txt');
-    expect(a.people[0].lastContact).toBe('2026-10-13');
+    expect(a.people[0].name).toBe('A One');
     const b = parseWhatsAppChat('03/04/2026, 21:04 - A One: x\n', 'WhatsApp Chat with A One.txt');
-    expect(b.people[0].lastContact).toBe('2026-04-03');
+    expect(b.people[0].name).toBe('A One');
   });
 
   it('treats chats with more than two senders as groups, and zip _chat.txt as unnamed', () => {

@@ -73,7 +73,6 @@ describe('detectPreset', () => {
       status: 'Status',
       org: 'Company',
       role: 'Role',
-      lastContact: 'Last Touchpoint',
       groups: ['Tags', 'Where Met'],
     });
   });
@@ -81,7 +80,7 @@ describe('detectPreset', () => {
   it('generic', () => {
     const d = detectPreset(['Full Name', 'Employer', 'Job Title', 'Circle', 'Last Seen', 'Mobile']);
     expect(d.preset).toBe('generic');
-    expect(d.mapping).toMatchObject({ name: 'Full Name', org: 'Employer', role: 'Job Title', groups: ['Circle'], lastContact: 'Last Seen' });
+    expect(d.mapping).toMatchObject({ name: 'Full Name', org: 'Employer', role: 'Job Title', groups: ['Circle'] });
   });
 });
 
@@ -112,12 +111,11 @@ describe('csvToResult', () => {
     expect(json).not.toContain('9123');
   });
 
-  it('splits group cells on commas and semicolons and parses dates', () => {
+  it('splits group cells on commas and semicolons, and keeps no contact dates', () => {
     const rows = parseCSV('Name,Tags,Last Contacted\nZoe Park,"a, b;c",Oct 3 2026\nBo Li,,garbage');
     const r = csvToResult(rows, detectPreset(rows[0]).mapping, 'Notion');
     expect(r.people[0].groups).toEqual(['a', 'b', 'c']);
-    expect(r.people[0].lastContact).toBe('2026-10-03');
-    expect(r.people[1].lastContact).toBeUndefined();
+    expect(JSON.stringify(r)).not.toContain('2026');
   });
 
   it('prefers the name column and falls back to first + last', () => {

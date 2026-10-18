@@ -5,8 +5,8 @@ import { csvToResult, importFile, parseProfile, profileKind, type TimelineEntry 
 import type { CsvMapping, CsvPreset, ImportResult } from './importers/types';
 import type { Sources } from './model';
 import {
-  clearWorkspace, defaultWorldName, discoveredTags, effectiveContexts, exportWorkspace, mergeImport, parseWorkspace,
-  pruneContexts, removeImport, saveWorkspace, storageAvailable, workspaceFromSources, type Workspace,
+  clearWorkspace, defaultWorldName, discoveredTags, downloadBackup, effectiveContexts, findDuplicates, markNotDuplicate, mergeImport, mergePeople, parseWorkspace,
+  protection, pruneContexts, removeImport, saveWorkspace, storageAvailable, workspaceFromSources, type Workspace,
 } from './workspace';
 
 export type Mode = 'local' | 'browser' | 'demo';
@@ -38,7 +38,7 @@ interface Pending {
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 /** Files worth reading inside an export zip. Everything else (messages, ads data…) is skipped unread. */
-const ZIP_KEEP = /(^|\/)(connections\.csv|education\.csv|positions\.csv|_chat\.txt|[^/]*\.vcf|friends[^/]*\.json|followers[^/]*\.json|following[^/]*\.json)$/i;
+const ZIP_KEEP = /(^|\/)(connections\.csv|education\.csv|positions\.csv|[^/]*\.ics|_chat\.txt|[^/]*\.vcf|friends[^/]*\.json|followers[^/]*\.json|following[^/]*\.json)$/i;
 
 const GUIDES: { title: string; steps: string }[] = [
   { title: 'LinkedIn connections', steps: 'LinkedIn → Me → Settings & Privacy → Data privacy → Get a copy of your data → pick “Connections” → Request archive. The email link gives a zip; drop the zip or Connections.csv here. Email addresses are dropped.' },
@@ -50,22 +50,44 @@ const GUIDES: { title: string; steps: string }[] = [
   { title: 'Notion, Airtable or any spreadsheet', steps: 'Export the table as CSV. You choose which column is the name, company, groups and last-contact date. Columns you don’t map are ignored.' },
 ];
 
-/** The three quickest starts, shown as tiles on the first-run screen. Everything else sits under "More sources". */
-const SOURCES: { id: string; title: string; time: string; blurb: string; steps: string[] }[] = [
+/** The four main sources, best start first, with steps for a computer and for a phone. Others sit under "More sources". */
+const SOURCES: { id: string; title: string; time: string; blurb: string; steps: string[]; phone: string[] }[] = [
   {
-    id: 'contacts', title: 'Phone contacts', time: 'About 1 minute', blurb: 'iPhone, Mac, Android or Google',
+    id: 'linkedin', title: 'LinkedIn', time: 'Best start · about 10 min', blurb: 'Your schools and jobs become worlds',
     steps: [
-      'iPhone or Mac: go to icloud.com/contacts (or open Contacts on a Mac), select all, then <b>Export vCard</b>.',
-      'Android or Google: go to contacts.google.com, then <b>Export → vCard</b>.',
-      'Drop the .vcf file below. Groups and labels become circles; phone numbers and emails are dropped.',
+      'On LinkedIn: <b>Me → Settings &amp; Privacy → Data privacy → Get a copy of your data</b>.',
+      'Tick <b>Connections</b> and <b>Profile</b> (your profile holds your schools and jobs), then <b>Request archive</b>.',
+      'LinkedIn emails a link, usually within 10 minutes. Explore the sample while you wait, then drop the zip below.',
+    ],
+    phone: [
+      'In the LinkedIn app: your photo → <b>Settings → Data privacy → Get a copy of your data</b>.',
+      'Tick <b>Connections</b> and <b>Profile</b>, then <b>Request archive</b>.',
+      'When the email arrives, download the zip, come back here, tap <b>choose one</b> below and pick it from Downloads.',
     ],
   },
   {
-    id: 'linkedin', title: 'LinkedIn', time: 'About 10 minutes', blurb: 'Companies become clusters',
+    id: 'contacts', title: 'Phone contacts', time: 'About 1 minute', blurb: 'Grouped by where people work',
     steps: [
-      'On LinkedIn: <b>Me → Settings &amp; Privacy → Data privacy → Get a copy of your data</b>.',
-      'Tick <b>Connections</b> only, then Request archive. LinkedIn emails a link, usually within 10 minutes.',
-      'Drop the zip or Connections.csv below. Email addresses are dropped.',
+      'Mac: open Contacts, select all, then <b>File → Export → Export vCard</b>. Google: contacts.google.com → <b>Export → vCard</b>.',
+      'Drop the .vcf file below. Groups become circles, and work emails group people by company.',
+      'Phone numbers, email addresses and notes are dropped as the file is read.',
+    ],
+    phone: [
+      'iPhone: open <b>Contacts</b>, tap <b>Lists</b>, then touch and hold <b>All Contacts</b> → <b>Export</b> → Save to Files.',
+      'Android: open <b>Contacts</b> → <b>Fix &amp; manage → Export to file</b>.',
+      'Tap <b>choose one</b> below and pick the .vcf file.',
+    ],
+  },
+  {
+    id: 'calendar', title: 'Calendar', time: 'About 2 minutes', blurb: 'Who you actually meet with',
+    steps: [
+      'Google Calendar: <b>Settings → Import &amp; export → Export</b>. Outlook: <b>File → Save Calendar</b>. Apple Calendar: <b>File → Export</b>.',
+      'Drop the .ics file (or Google’s zip) below. People you meet often count as closer; recurring meetings become groups.',
+      'Meeting descriptions, locations, one-off titles, dates and email addresses are never kept.',
+    ],
+    phone: [
+      'Calendar exports need a computer: phones can’t save an .ics file of your calendar.',
+      'Start with LinkedIn or contacts here, and add your calendar later from a laptop.',
     ],
   },
   {
@@ -75,8 +97,14 @@ const SOURCES: { id: string; title: string; time: string; blurb: string; steps: 
       'Drop it below, then pick which columns hold the name, company and groups.',
       'Columns you don’t pick are ignored and never stored.',
     ],
+    phone: [
+      'Export the table as CSV from the app, or save it to Files.',
+      'Tap <b>choose one</b> below and pick the .csv file, then pick the name, company and group columns.',
+    ],
   },
 ];
+/** Touch-first devices get phone steps and "tap" wording. */
+const onPhone = () => matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820;
 const MORE = ['WhatsApp chats', 'Facebook friends', 'Instagram'];
 
 export function mountDataView(host: HTMLElement, env: DataViewEnv) {
@@ -118,15 +146,15 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
         try {
           const entries = unzipSync(new Uint8Array(await f.arrayBuffer()), { filter: (e) => ZIP_KEEP.test(e.name) });
           const names = Object.keys(entries);
-          if (!names.length) pending.push(newPending(f.name, { error: 'Nothing importable in this zip (looked for Connections.csv, _chat.txt, .vcf, friends/followers .json).' }));
+          if (!names.length) pending.push(newPending(f.name, { error: 'Nothing importable in this zip (looked for Connections.csv, your LinkedIn profile, .ics, _chat.txt, .vcf, friends/followers .json).' }));
           for (const n of names) addText(`${f.name} › ${n}`, n, strFromU8(entries[n]));
         } catch (e) {
           pending.push(newPending(f.name, { error: `Couldn't open the zip: ${(e as Error).message}` }));
         }
-      } else if (/\.(csv|vcf|txt|json)$/i.test(f.name)) {
+      } else if (/\.(csv|vcf|ics|txt|json)$/i.test(f.name)) {
         addText(f.name, f.name, await f.text());
       } else {
-        pending.push(newPending(f.name, { error: 'Unsupported file type. Use .csv, .vcf, .txt (WhatsApp), .json (Facebook/Instagram) or a .zip of those.' }));
+        pending.push(newPending(f.name, { error: 'Unsupported file type. Use .csv, .vcf, .ics, .txt (WhatsApp), .json (Facebook/Instagram) or a .zip of those.' }));
       }
     }
     if (profile.length > had && !pending.some((p) => p.result?.kind === 'linkedin' && !p.done)) {
@@ -176,7 +204,7 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
       ${local ? `<section class="dv-block"><h2>Import</h2><p class="fine">You're viewing your local files, which the Python importer maintains. To try the in-browser importers, switch the source to Browser workspace above; your local files stay as they are.</p></section>` : `<section class="dv-block" id="import"><h2>Add a source</h2>
         ${sourcePicker()}
       </section>`}
-      ${local || !ws.people.length ? '' : yourData() + tags() + contexts()}
+      ${local || !ws.people.length ? '' : duplicates() + yourData() + tags() + contexts()}
       ${privacy()}
       ${storage()}
     </div>`;
@@ -185,11 +213,11 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
   /** Source tiles, the chosen source's steps, the drop zone and any files waiting to be added. */
   function sourcePicker() {
     const pick = SOURCES.find((x) => x.id === source);
-    return `<div class="sources" role="group" aria-label="Choose a source">
+    return `<div class="source-tiles" role="group" aria-label="Choose a source">
         ${SOURCES.map((x) => `<button class="source" data-src-tile="${x.id}" aria-pressed="${x.id === source}">
           <b>${esc(x.title)}</b><span>${esc(x.blurb)}</span><small>${esc(x.time)}</small></button>`).join('')}
       </div>
-      ${pick ? `<ol class="steps">${pick.steps.map((t) => `<li>${t}</li>`).join('')}</ol>` : ''}
+      ${pick ? `<ol class="steps">${(onPhone() ? pick.phone : pick.steps).map((t) => `<li>${t}</li>`).join('')}</ol>` : ''}
       ${dropZone()}
       ${pending.map(pendingCard).join('')}
       <details class="guides"><summary>More sources: WhatsApp, Facebook, Instagram</summary>
@@ -201,19 +229,19 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
   function firstRun() {
     return `<section class="hero">
         <h1>Make your map</h1>
-        <p>Start with one source. You’ll see your network in about a minute, and the file never leaves this browser.</p>
+        <p>Start with one source. LinkedIn gives the best first map: request it now, and it arrives while you explore the sample. Files never leave this browser.</p>
       </section>
       ${sourcePicker()}
-      <p class="lock"><b>Private by design.</b> Files are read here in your browser and saved only in this browser. Nothing is uploaded: no account, no server, no tracking. Phone numbers, emails and message text are dropped as files are read.</p>
+      <p class="lock"><b>Private by design.</b> Files are read here in your browser and saved only in this browser. Nothing is uploaded: no account, no server, no tracking. Phone numbers, emails and message text are dropped as files are read. <a href="/privacy.html">How privacy works</a></p>
       <p class="fine aside"><button class="linkish" data-sample>Back to the sample</button> ·
         <label class="linkish">Restore a backup<input type="file" id="restore" accept=".json" hidden /></label></p>`;
   }
 
   function dropZone() {
     return `<label class="drop" data-drop>
-        <input type="file" id="files" multiple accept=".csv,.vcf,.txt,.json,.zip" hidden />
-        <b>Drop a file here</b> or <span class="linkish">choose one</span>
-        <small>.vcf, .csv, .zip, WhatsApp .txt or Facebook/Instagram .json</small>
+        <input type="file" id="files" multiple accept=".csv,.vcf,.ics,.txt,.json,.zip" hidden />
+        ${onPhone() ? '<b>Tap to choose a file</b>' : '<b>Drop a file here</b> or <span class="linkish">choose one</span>'}
+        <small>LinkedIn zip, contacts .vcf, calendar .ics, .csv, WhatsApp .txt or Facebook/Instagram .json</small>
       </label>`;
   }
 
@@ -227,6 +255,7 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
         <li>Phone numbers, emails, addresses, notes and message text are dropped on import.</li>
         <li>Delete everything at any time under Storage below.</li>
       </ul>
+      <p class="fine"><a href="/privacy.html">How privacy works, and how to check it yourself</a> · <a href="https://github.com/zuzivian/network-scope">Source code</a></p>
     </section>`;
   }
 
@@ -299,7 +328,7 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
       <p class="fine">Pick the columns to use. Anything not picked is ignored and never stored.</p>
       <div class="mapping">
         ${sel('name', 'Full name')}${sel('firstName', 'or first name')}${sel('lastName', 'and last name')}
-        ${sel('org', 'Company')}${sel('role', 'Title / role')}${sel('lastContact', 'Last contact date')}${sel('status', 'Status')}${sel('notes', 'Notes')}
+        ${sel('org', 'Company')}${sel('role', 'Title / role')}${sel('status', 'Status')}${sel('notes', 'Notes')}
       </div>
       <fieldset class="groups"><legend>Columns that name groups or contexts</legend>
         ${headers.map((h) => `<label><input type="checkbox" data-group-col="${esc(h)}" data-id="${p.id}" ${mapping.groups.includes(h) ? 'checked' : ''}/> ${esc(h)}</label>`).join('')}
@@ -317,6 +346,17 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
       <ul class="imports">${ws.imports.slice().reverse().map((i) => `<li><span><b>${esc(i.source)}</b>
         <small>${new Date(i.at).toLocaleDateString()} · ${i.people} rows</small></span>
         <button data-remove-import="${i.id}" title="Removes people only this import added">Remove</button></li>`).join('')}</ul>
+    </section>`;
+  }
+
+  function duplicates() {
+    const list = findDuplicates(ws);
+    if (!list.length) return '';
+    const who = (p: (typeof list)[number]['a']) => `<b>${esc(p.name)}</b>${p.org ? ` <small>${esc(p.org)}</small>` : ''}`;
+    return `<section class="dv-block" id="duplicates"><h2>Possible duplicates <span class="count">${list.length}</span></h2>
+      <p class="fine">Same person twice, or two people who share a name? Merging keeps everything from both.</p>
+      <ul class="dupes">${list.slice(0, 40).map((d) => `<li><span class="pair">${who(d.a)} <span class="amp">&amp;</span> ${who(d.b)}<small class="why">${esc(d.why)}</small></span>
+        <span class="row"><button data-merge="${d.a.id}|${d.b.id}">Same person</button><button data-notdup="${d.a.id}|${d.b.id}">Different people</button></span></li>`).join('')}</ul>
     </section>`;
   }
 
@@ -352,7 +392,12 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
   }
 
   function storage() {
-    return `<section class="dv-block"><h2>Storage</h2>
+    const last = ws.lastBackupAt ? new Date(ws.lastBackupAt).toLocaleDateString() : 'never';
+    const keep = env.mode !== 'browser' || !ws.people.length ? ''
+      : protection === 'persisted'
+        ? `<p class="fine">This browser has agreed to keep your map. A backup still protects you if you clear site data or switch devices. Last backup: ${last}.</p>`
+        : `<p class="keep-warn"><b>This browser may clear your map.</b> Safari removes site data after 7 days without a visit, and any browser can when storage runs low. Download a backup now and then (last backup: ${last}). On iPhone or iPad, <b>Share → Add to Home Screen</b> keeps it safe.</p>`;
+    return `<section class="dv-block" id="storage"><h2>Storage</h2>${keep}
       <div class="row">
         <button data-export ${ws.people.length ? '' : 'disabled'}>Download a backup (.json)</button>
         <label class="button">Restore a backup<input type="file" id="restore" accept=".json" hidden /></label>
@@ -453,7 +498,18 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
         await saveWorkspace(ws);
         return env.reload('graph');
       }
-      return commit(`Imported ${p.result!.source}: ${p.done}`);
+      const dupes = findDuplicates(ws).length;
+      return commit(`Imported ${p.result!.source}: ${p.done}${dupes ? ` ${dupes} possible duplicate${dupes === 1 ? '' : 's'} to check below.` : ''}`);
+    }
+    if (b('[data-merge]')) {
+      const [a, c] = b('[data-merge]')!.dataset.merge!.split('|');
+      mergePeople(ws, a, c);
+      return commit('Merged.');
+    }
+    if (b('[data-notdup]')) {
+      const [a, c] = b('[data-notdup]')!.dataset.notdup!.split('|');
+      markNotDuplicate(ws, a, c);
+      return commit('Kept as different people.');
     }
     if (b('[data-remove-import]')) {
       if (!confirm('Remove this import? People that only it added will be removed.')) return;
@@ -482,12 +538,9 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
       return commit('Deleted.');
     }
     if (b('[data-export]')) {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(exportWorkspace(ws));
-      a.download = `network-scope-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-      return;
+      await downloadBackup(ws);
+      flash = 'Backup downloaded. Keep it somewhere safe; restore it here or on another device.';
+      return render();
     }
     if (b('[data-clear]')) {
       if (!confirm('Delete every person, context and decision stored in this browser? This cannot be undone (download a backup first if unsure).')) return;

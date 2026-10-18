@@ -34,6 +34,9 @@ export interface GraphView {
   resetView(): void;
 }
 
+/** Fill strength by closeness: core people solid, acquaintances light. Not-yet-met people are hollow. */
+const FILL: Record<number, number> = { 1: 1, 2: 0.8, 3: 0.45, 4: 0.3 };
+
 function personRadius(p: Person) {
   return p.ring === 1 ? 7 : p.ring === 2 ? 5.75 : p.tier === 1 ? 5.5 : 4.5;
 }
@@ -162,10 +165,9 @@ export function mountGraph(host: HTMLElement, net: Network, onSelect: (id: strin
     .on('mouseleave', () => hover(null));
 
   nodeSel.append('circle').attr('class', 'hit').attr('r', (d) => d.r + 6);
-  // People you've been in touch with lately breathe: a slow glow whose strength is their recency.
-  nodeSel.filter((d) => (d.person?.warmth ?? 0) > 0.55).append('circle').attr('class', 'glow').attr('r', (d) => d.r + 5)
-    .style('--warm', (d) => String(d.person!.warmth)).style('animation-delay', () => `${(-Math.random() * 4).toFixed(2)}s`);
-  nodeSel.filter((d) => !!d.person?.flags.length).append('circle').attr('class', 'alert').attr('r', (d) => d.r + 3.5);
+  // Your closest people breathe: a slow glow, stronger for core than active.
+  nodeSel.filter((d) => !!d.person?.met && d.person.ring <= 2).append('circle').attr('class', 'glow').attr('r', (d) => d.r + 5)
+    .style('--warm', (d) => (d.person!.ring === 1 ? '1' : '0.6')).style('animation-delay', () => `${(-Math.random() * 4).toFixed(2)}s`);
   nodeSel.filter((d) => d.kind === 'context').append('rect').attr('class', 'shape')
     .attr('x', (d) => -d.r).attr('y', (d) => -d.r).attr('width', (d) => d.r * 2).attr('height', (d) => d.r * 2)
     .attr('transform', 'rotate(45)');
@@ -174,7 +176,7 @@ export function mountGraph(host: HTMLElement, net: Network, onSelect: (id: strin
       const p = d.person;
       if (!p) return null;
       if (!p.met) return 0;
-      return p.warmth == null ? 0.5 : 0.22 + 0.78 * p.warmth;
+      return FILL[p.ring];
     });
   nodeSel.filter((d) => d.kind === 'me').append('text').attr('class', 'me-text').attr('dy', '0.35em').text((d) => d.label);
   nodeSel.filter((d) => d.kind !== 'me').append('text').attr('class', 'label')
@@ -389,9 +391,8 @@ export function mountGraph(host: HTMLElement, net: Network, onSelect: (id: strin
       const p = d.person;
       const hidden = d.kind !== 'me' && d.worlds.every((w) => s.hidden.has(w));
       const matches = !q || (`${d.label} ${p?.org ?? ''} ${p?.role ?? ''}`.toLowerCase().includes(q));
-      const attn = !s.attentionOnly || d.kind !== 'person' || !!p?.flags.length;
       const outOfFocus = !!focus && !focus.has(d.id) && d.kind !== 'me';
-      g.classed('dim', hidden || (d.kind === 'person' && (!matches || !attn)) || outOfFocus)
+      g.classed('dim', hidden || (d.kind === 'person' && !matches) || outOfFocus)
         .classed('match', !!q && matches && d.kind === 'person' && !hidden)
         .classed('focus', !!focus && focus.has(d.id))
         .classed('selected', d.id === s.selected);
@@ -427,8 +428,8 @@ function placeLabels(nodes: GNode[]): Map<string, 'left' | 'right'> {
     taken.push({ x0: n.x! - w / 2, y0: y - 9, x1: n.x! + w / 2, y1: y + 4 });
   }
   const out = new Map<string, 'left' | 'right'>();
-  const want = nodes.filter((n) => n.person && (n.person.ring <= 2 || n.person.flags.length || n.person.worlds.length > 1 || n.person.tier === 1));
-  const rank = (n: GNode) => n.person!.ring - n.person!.flags.length - (n.person!.worlds.length > 1 ? 1 : 0);
+  const want = nodes.filter((n) => n.person && (n.person.ring <= 2 || n.person.worlds.length > 1 || n.person.tier === 1));
+  const rank = (n: GNode) => n.person!.ring - (n.person!.worlds.length > 1 ? 1 : 0);
   want.sort((a, b) => rank(a) - rank(b));
   for (const n of want) {
     const w = n.label.length * 5.9;
@@ -459,7 +460,6 @@ function nodeClass(d: GNode) {
   if (p) {
     c.push(`ring-${p.ring}`);
     if (!p.met) c.push('unmet');
-    if (p.flags.length) c.push('flagged');
     if (p.worlds.length > 1) c.push('bridge');
   }
   return c.join(' ');

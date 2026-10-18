@@ -1,4 +1,4 @@
-import { FLAG_LABEL, isSocial, LINK_LABEL, RINGS, warmPath, type Context, type Flag, type Network, type Node } from './model';
+import { introPath, introText, isSocial, LINK_LABEL, RINGS, type Context, type Network, type Node } from './model';
 import type { State } from './state';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -8,19 +8,13 @@ function fmtDate(d?: string) {
   return new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function ago(n: Node) {
-  if (n.daysSince == null) return n.met ? 'no date' : 'never';
-  if (n.daysSince === 0) return 'today';
-  return `${n.daysSince}d ago`;
-}
-
 export function renderPanel(el: HTMLElement, net: Network, s: State) {
   const ctx = new Map(net.contexts.map((c) => [c.id, c]));
   const people = new Map(net.people.map((p) => [p.id, p]));
   const worldName = (id: string) => ctx.get(id)?.name ?? id;
 
   const dot = (n: Node) =>
-    `<span class="dot ring-${n.ring}${n.met ? '' : ' never'}${n.warmth == null && n.met ? ' undated' : ''}" style="--w:${n.warmth ?? 0.4}"></span>`;
+    `<span class="dot ring-${n.ring}${n.met ? '' : ' never'}"></span>`;
   const row = (n: Node, meta: string) => `<li><button class="person-row" data-select="${n.id}">
     ${dot(n)}<span class="who"><b>${esc(n.name)}</b><small>${esc(n.org ?? n.role ?? worldName(n.world))}</small></span>
     <span class="meta${meta.length > 16 ? ' wide' : ''}">${esc(meta)}</span></button></li>`;
@@ -33,16 +27,8 @@ export function renderPanel(el: HTMLElement, net: Network, s: State) {
     return parts.join(' › ');
   };
 
-  function list(title: string, flag: Flag, visible: Node[], meta: (n: Node) => string, sort: (a: Node, b: Node) => number) {
-    const items = visible.filter((p) => p.flags.includes(flag)).sort(sort);
-    if (!items.length) return '';
-    return `<section class="block"><h3>${title} <span class="count">${items.length}</span></h3>
-      <ul class="people">${items.slice(0, 6).map((n) => row(n, meta(n))).join('')}</ul></section>`;
-  }
-
   function readout() {
     const visible = net.people.filter((p) => !p.worlds.every((w) => s.hidden.has(w)));
-    const flagged = visible.filter((p) => p.flags.length).length;
     const bridges = visible.filter((p) => p.worlds.length > 1).sort((a, b) => b.worlds.length - a.worlds.length || a.ring - b.ring);
     const worldCounts = net.worlds.map((w) => ({ w, n: visible.filter((p) => p.worlds.includes(w.id)).length })).sort((a, b) => b.n - a.n);
     const max = Math.max(1, ...worldCounts.map((x) => x.n));
@@ -57,7 +43,7 @@ export function renderPanel(el: HTMLElement, net: Network, s: State) {
         <div class="stats">
           <div><b>${visible.length}</b><span>people</span></div>
           <div><b>${bridges.length}</b><span>bridges</span></div>
-          <div class="${flagged ? 'warn' : ''}"><b>${flagged}</b><span>need attention</span></div>
+          <div><b>${net.worlds.filter((w) => !s.hidden.has(w.id)).length}</b><span>worlds</span></div>
         </div></header>
       <section class="block"><h3>By world</h3>
         <ul class="rings">${worldCounts.map(({ w, n }) => `<li><button class="world-row" data-select="${w.id}"><span class="rl">${esc(w.name)}</span>
@@ -66,9 +52,6 @@ export function renderPanel(el: HTMLElement, net: Network, s: State) {
       ${bridges.length ? `<section class="block"><h3>Bridges <span class="count">${bridges.length}</span></h3>
         <p class="fine lead">People who connect two or more of your worlds.</p>
         <ul class="people">${bridges.slice(0, 8).map((n) => row(n, n.worlds.map(worldName).join(' · '))).join('')}</ul></section>` : ''}
-      ${list('Follow-up due', 'due', visible, (n) => (n.daysOverdue ? `${n.daysOverdue}d overdue` : 'today'), (a, b) => (b.daysOverdue ?? 0) - (a.daysOverdue ?? 0))}
-      ${list('Thank-you owed', 'thanks', visible, (n) => `met ${ago(n)}`, (a, b) => (b.daysSince ?? 0) - (a.daysSince ?? 0))}
-      ${list('Gone quiet', 'quiet', visible, (n) => ago(n), (a, b) => (b.daysSince ?? 0) - (a.daysSince ?? 0))}
       <footer class="sources"><h3>Sources</h3><ul>${src}</ul>
         ${net.excluded ? `<p class="fine">${net.excluded} closed contact${net.excluded > 1 ? 's' : ''} hidden.</p>` : ''}</footer>`;
   }
@@ -82,10 +65,7 @@ export function renderPanel(el: HTMLElement, net: Network, s: State) {
     const chips = [...n.worlds.map(worldName), RINGS[n.ring - 1].label, n.tier ? `Tier ${n.tier}` : '', n.status ?? '']
       .filter(Boolean).map((c) => `<span class="chip">${esc(c)}</span>`).join('');
     const fact = (k: string, v?: string, cls = '') => (v ? `<div class="fact ${cls}"><dt>${k}</dt><dd>${esc(v)}</dd></div>` : '');
-    const chain = warmPath(net, n.id);
-    const recency = !n.met ? 'Not met yet.'
-      : n.daysSince == null ? 'No contact date recorded yet.'
-      : `Last contact ${ago(n)} (${fmtDate(n.lastContact)}). Fades to half every ${n.halfLife} days.${n.quietAfter ? ` Flagged after ${n.quietAfter} days of silence.` : ''}`;
+    const chain = n.met ? null : introPath(net, n.id);
 
     return `
       <header class="panel-head dossier-head">
@@ -94,17 +74,13 @@ export function renderPanel(el: HTMLElement, net: Network, s: State) {
         <p class="sub">${esc([n.role, n.org].filter(Boolean).join(' · '))}</p>
         <div class="chips">${chips}</div>
       </header>
-      ${n.flags.length ? `<div class="alerts">${n.flags.map((f) => `<span class="alert-chip">${FLAG_LABEL[f]}${f === 'due' && n.daysOverdue ? ` · ${n.daysOverdue}d` : ''}</span>`).join('')}</div>` : ''}
-      ${!n.met ? `<section class="block"><h3>Warm path</h3>${chain && chain.length > 1
-        ? `<p class="chain"><span>You</span>${chain.map((id) => `<span class="arrow">→</span><button class="link-btn" data-select="${id}">${esc(people.get(id)!.name)}</button>`).join('')}</p>`
-        : '<p class="fine">No warm path recorded yet.</p>'}</section>` : ''}
-      <section class="block"><h3>Recency</h3>
-        <div class="meter ${n.met ? '' : 'never'}${n.warmth == null && n.met ? ' undated' : ''}"><i style="width:${n.warmth == null ? 0 : Math.round(n.warmth * 100)}%"></i></div>
-        <p class="fine">${recency}</p>
-      </section>
+      ${!n.met ? `<section class="block"><h3>Intro path</h3>${chain
+        ? `<p class="chain"><span>You</span>${chain.map((st) => `<span class="arrow">→</span><button class="link-btn" data-select="${st.id}">${esc(people.get(st.id)!.name)}</button>`).join('')}</p>
+           <ul class="why">${chain.slice(1).map((st) => `<li>${esc(st.why)}</li>`).join('')}</ul>
+           <div class="row copy-row"><button class="link-btn" data-copy="path" data-target="${n.id}">Copy path</button>
+             <button class="link-btn" data-copy="ask" data-target="${n.id}">Copy intro request</button><span class="copied" role="status"></span></div>`
+        : '<p class="fine">No one you know is connected to them yet. Add a source where they appear (a contacts list, a group chat) to find a path.</p>'}</section>` : ''}
       <dl class="facts">
-        ${fact('Follow-up', n.followUp ? fmtDate(n.followUp) : undefined, n.flags.includes('due') ? 'warn' : '')}
-        ${fact('Next action', n.nextAction)}
         ${fact('Notes', n.notes)}
         ${fact('Source', `${n.sources.join(', ')}${n.sample ? ' (sample)' : ''}`)}
       </dl>
@@ -155,4 +131,21 @@ export function renderPanel(el: HTMLElement, net: Network, s: State) {
   const context = s.selected ? ctx.get(s.selected) : undefined;
   el.innerHTML = person ? personDossier(person) : context ? contextDossier(context) : readout();
   el.scrollTop = 0;
+}
+
+/** Copy an intro path, or a ready-to-send intro request, for the person shown in the panel. */
+export function bindPanelCopy(el: HTMLElement, net: () => Network) {
+  el.addEventListener('click', async (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-copy]');
+    if (!b) return;
+    const text = introText(net(), b.dataset.target!, b.dataset.copy as 'path' | 'ask');
+    const note = el.querySelector('.copied');
+    try {
+      await navigator.clipboard.writeText(text);
+      if (note) note.textContent = 'Copied.';
+    } catch {
+      // Clipboard blocked (some browsers, insecure contexts): show the text to copy by hand.
+      if (note) note.textContent = text;
+    }
+  });
 }

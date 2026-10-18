@@ -4,6 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="Network" />
   <title>Network Scope</title>
   <meta name="description" content="Map your network privately in your browser: import LinkedIn, contacts, WhatsApp and more. Nothing leaves your device." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -18,8 +23,8 @@
         <label class="search"><span class="sr">Search people</span><input id="search" type="search" placeholder="Search name, company, group" autocomplete="off" /></label>
         <div class="seg" role="group" aria-label="View"><button data-view="graph" aria-pressed="true">Graph</button><button data-view="scope" aria-pressed="false">Scope</button><button data-view="sort" aria-pressed="false">Sort</button><button data-view="data" aria-pressed="false">Data</button></div>
         <div id="circles" class="filters" role="group" aria-label="Show worlds"></div>
-        <button id="attention" class="toggle" aria-pressed="false">Needs attention</button>
         <button id="motion" class="icon-btn" aria-pressed="true" title="Toggle sweep">Sweep</button>
+        <button id="feedback-btn" class="icon-btn quiet-btn">Feedback</button>
       </div>
     </header>
     <main class="stage">
@@ -31,15 +36,15 @@
       <div class="legend" aria-hidden="true">
         <div class="graph-only"><i class="lg-world"></i>World</div>
         <div class="graph-only"><i class="lg-diamond"></i>Team, class or group</div>
-        <div><i class="lg-dot"></i>Person: brighter = more recent</div>
+        <div><i class="lg-dot"></i>Person: darker = closer</div>
         <div><i class="lg-dot never"></i>Not met yet</div>
-        <div><i class="lg-dot alert"></i>Amber ring = needs attention</div>
         <div class="graph-only"><i class="lg-line solid"></i>Partner / family</div>
-        <div><i class="lg-line"></i>Intro / warm path</div>
+        <div><i class="lg-line"></i>Intro</div>
       </div>
       <button id="reset" class="reset" title="Reset zoom">Reset view</button>
     </main>
     <aside id="panel" class="panel" aria-live="polite"></aside>
+    <dialog id="feedback" class="feedback" aria-label="Send feedback"></dialog>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

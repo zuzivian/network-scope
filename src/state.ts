@@ -5,7 +5,6 @@ export interface State {
   hidden: Set<string>; // world ids
   view: View;
   query: string;
-  attentionOnly: boolean;
 }
 
 export function createStore(initial: State) {

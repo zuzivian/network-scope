@@ -1,7 +1,7 @@
 // The network model.
 //
 // Structure comes from the graph file (contexts tree + people + direct links).
-// CRM state comes from the Notion trackers and is merged onto the same people.
+// Notion trackers add people, closeness, companies and intro links onto the same people.
 // Topology: Nat → worlds → sub-contexts → people, plus person↔person links.
 // People in several contexts are what tie the graph together.
 
@@ -14,14 +14,6 @@ export const RINGS: { ring: Ring; label: string }[] = [
   { ring: 3, label: 'Acquainted' },
   { ring: 4, label: 'Targets' },
 ];
-
-export type Flag = 'due' | 'thanks' | 'quiet';
-
-export const FLAG_LABEL: Record<Flag, string> = {
-  due: 'Follow-up due',
-  thanks: 'Thank-you owed',
-  quiet: 'Gone quiet',
-};
 
 export interface Context {
   id: string;
@@ -46,26 +38,12 @@ export interface Person {
   role?: string;
   status?: string;
   tier?: number;
-  lastContact?: string;
-  followUp?: string;
-  nextAction?: string;
   notes?: string;
-  thankYouOwed: boolean;
-  halfLife: number;
-  quietAfter: number | null;
   sources: string[];
   sample: boolean;
 }
 
-export interface Derived {
-  daysSince: number | null;
-  /** 1 = just spoke, halves every halfLife days. null = no date recorded. */
-  warmth: number | null;
-  flags: Flag[];
-  daysOverdue: number | null;
-}
-
-export type Node = Person & Derived;
+export type Node = Person;
 
 export type LinkKind = 'part' | 'member' | 'partner' | 'family' | 'intro' | 'knows';
 
@@ -115,12 +93,6 @@ function date(v: unknown): string | undefined {
   return str(v)?.match(/\d{4}-\d{2}-\d{2}/)?.[0];
 }
 
-function bool(v: unknown): boolean {
-  if (typeof v === 'boolean') return v;
-  const s = str(v)?.toLowerCase();
-  return s === '__yes__' || s === 'yes' || s === 'true' || s === 'checked';
-}
-
 function tier(v: unknown): number | undefined {
   const m = str(v)?.match(/\d/);
   return m ? Number(m[0]) : undefined;
@@ -147,13 +119,7 @@ interface Tracked {
   org?: string;
   role?: string;
   tier?: number;
-  lastContact?: string;
-  followUp?: string;
-  nextAction?: string;
   notes?: string;
-  thankYouOwed: boolean;
-  halfLife: number;
-  quietAfter: number | null;
   /** Free text that may name a context ("Ski trip, Sept 2026", "MBA'27"). */
   hints: string[];
   company?: string;
@@ -178,19 +144,13 @@ function fromNetworkingTracker(rows: Row[]): { people: Tracked[]; excluded: numb
     const howMet = str(r['How We Met']);
     const s = status?.toLowerCase() ?? '';
     const closed = s === 'closed';
-    const lastContacted = date(r['Last Contacted']);
     people.push({
       id: slug(name), name, status,
       ring: closed ? 3 : NETWORKING_RING[s] ?? 3,
       // A closed row is someone you dealt with, unless there was never any contact.
-      met: closed ? !!lastContacted : s !== 'to reach out' && s !== '',
+      met: closed ? !!date(r['Last Contacted']) : s !== 'to reach out' && s !== '',
       org: company, role: str(r['Role']), tier: tier(r['Tier']),
-      lastContact: lastContacted, followUp: closed ? undefined : date(r['Follow-up Date']),
-      nextAction: /no follow-up needed/i.test(nextAction ?? '') ? undefined : nextAction,
       notes: [notes, howMet ? `How you met: ${howMet}` : undefined].filter(Boolean).join(' ') || undefined,
-      thankYouOwed: /meeting complete|had chat/.test(s) && !bool(r['Thank You Sent']),
-      halfLife: 21,
-      quietAfter: /warm|following up|meeting complete|had chat/.test(s) ? 21 : null,
       hints: howMet ? [howMet] : [],
       company,
       mentions: viaNames(nextAction, notes, howMet),
@@ -214,12 +174,6 @@ function fromClassmateNetwork(rows: Row[]): Tracked[] {
       ring: CLASSMATE_RING[s] ?? 3,
       met: s !== 'not yet met',
       role: str(r['Program']) ?? 'Classmate',
-      lastContact: [date(r['Last Met']), date(r['Last Touchpoint'])].filter(Boolean).sort().pop(),
-      followUp: date(r['Follow-up Date']),
-      nextAction: followUp,
-      thankYouOwed: false,
-      halfLife: s === 'regular contact' ? 45 : 30,
-      quietAfter: s === 'regular contact' ? 45 : s === 'following up' ? 14 : null,
       notes: str(r['Where Met']) ? `Met: ${str(r['Where Met'])}` : undefined,
       hints: [str(r['Where Met']) ?? '', str(r['Section']) ? `Section ${str(r['Section'])!.replace(/^section\s*/i, '')}` : '', 'classmate'].filter(Boolean),
       mentions: viaNames(followUp),
@@ -235,7 +189,7 @@ export interface GraphFile {
   contexts: { id: string; name: string; parent: string; years?: string; role?: string }[];
   people: {
     id: string; name: string; contexts: string[]; closeness?: number; met?: boolean;
-    org?: string; role?: string; tier?: number; lastContact?: string; followUp?: string; nextAction?: string; notes?: string;
+    org?: string; role?: string; tier?: number; notes?: string;
     sources?: string[];
   }[];
   links: { a: string; b: string; kind: LinkKind; label?: string }[];
@@ -244,27 +198,9 @@ export interface GraphFile {
 // ---------- Derivation ----------
 
 export function localToday(): string {
-  const q = new URLSearchParams(location.search).get('today');
+  const q = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('today');
   if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) return q;
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
-}
-
-const dayMs = 86_400_000;
-const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / dayMs);
-
-/** Next actions that say the loop is closed ("Thanked after…", "No follow-up needed"). */
-const CLOSED_LOOP = /\b(thanked|thank-you done|done\b|no (further |active )?follow-?up|not revisiting|none (needed|pending)|no need to pursue|on hold)/i;
-
-function derive(p: Person, today: string): Node {
-  const daysSince = p.lastContact ? Math.max(0, daysBetween(p.lastContact, today)) : null;
-  const warmth = daysSince == null ? null : Math.pow(0.5, daysSince / p.halfLife);
-  const flags: Flag[] = [];
-  let daysOverdue: number | null = null;
-  const closed = CLOSED_LOOP.test(p.nextAction ?? '');
-  if (!closed && p.followUp && p.followUp <= today) { flags.push('due'); daysOverdue = daysBetween(p.followUp, today); }
-  if (p.thankYouOwed) flags.push('thanks');
-  if (!closed && p.quietAfter != null && daysSince != null && daysSince > p.quietAfter && !(p.followUp && p.followUp > today)) flags.push('quiet');
-  return { ...p, daysSince, warmth, flags, daysOverdue };
 }
 
 export interface Sources {
@@ -315,9 +251,7 @@ export function buildNetwork(src: Sources): Network {
     people.set(p.id, {
       id: p.id, name: p.name, contexts: p.contexts.filter((c) => ctxById.has(c)), world: '', worlds: [],
       ring: closeness, met: p.met ?? true,
-      org: p.org, role: p.role, tier: p.tier, lastContact: p.lastContact, followUp: p.followUp,
-      nextAction: p.nextAction, notes: p.notes, thankYouOwed: false,
-      halfLife: closeness === 1 ? 14 : 30, quietAfter: null,
+      org: p.org, role: p.role, tier: p.tier, notes: p.notes,
       sources: p.sources ?? [graphSource], sample: src.graph.sample,
     });
   }
@@ -395,19 +329,13 @@ export function buildNetwork(src: Sources): Network {
     }
     const prev = people.get(t.id);
     const trackerSample = t.source === 'Networking Tracker' ? src.networking.sample : src.classmates.sample;
-    // CRM state from the tracker wins; structure from the graph file is kept.
+    // The tracker adds closeness, company and notes; structure from the graph file is kept.
     people.set(t.id, {
       id: t.id, name: prev?.name ?? t.name, world: '', worlds: [],
       // Closest view wins when two trackers (or vault + tracker) disagree.
       ring: (prev ? Math.min(prev.ring, t.ring) : t.ring) as Ring, met: t.met || !!prev?.met, status: t.status ?? prev?.status, tier: t.tier ?? prev?.tier,
       org: t.org ?? prev?.org, role: t.role ?? prev?.role,
-      lastContact: [t.lastContact, prev?.lastContact].filter(Boolean).sort().pop(),
-      // The Networking Tracker is the live CRM: its next action outranks the classmate log's.
-      ...(prev?.sources.includes('Networking Tracker')
-        ? { followUp: prev.followUp ?? t.followUp, nextAction: prev.nextAction ?? t.nextAction }
-        : { followUp: t.followUp ?? prev?.followUp, nextAction: t.nextAction ?? prev?.nextAction }),
       notes: [prev?.notes, t.notes].filter(Boolean).join(' ') || undefined,
-      thankYouOwed: t.thankYouOwed, halfLife: t.halfLife, quietAfter: t.quietAfter,
       contexts: [...new Set([...(prev?.contexts ?? []), ...ctxIds])],
       sources: [...new Set([...(prev?.sources ?? []), t.source])],
       sample: (prev?.sample ?? true) && trackerSample,
@@ -419,18 +347,14 @@ export function buildNetwork(src: Sources): Network {
     if (other && other.id !== m.from) links.push({ a: other.id, b: m.from, kind: 'intro', label: 'Named as warm path in Notion' });
   }
 
-  // Encounters (Notion): latest date per person, and "met together" links for small groups.
+  // Encounters (Notion): who you've met, and "met together" links for small groups.
   for (const e of src.encounters) {
     const when = date(e['Date']);
     const title = str(e['Name']) ?? 'Encounter';
     const names = (str(e['People']) ?? '').split(';').map((x) => x.replace(/\(.*?\)/g, '').trim())
       .filter((x) => x && !/nathaniel wong|unknown|'s |guests/i.test(x));
     const ids = names.map(resolveId).filter((id) => people.has(id));
-    for (const id of ids) {
-      const p = people.get(id)!;
-      if (when && (!p.lastContact || when > p.lastContact)) p.lastContact = when;
-      p.met = true;
-    }
+    for (const id of ids) people.get(id)!.met = true;
     if (ids.length >= 2 && ids.length <= 7) {
       for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
         links.push({ a: ids[i], b: ids[j], kind: 'knows', label: `Together at “${title}”${when ? ` (${when})` : ''}` });
@@ -466,7 +390,7 @@ export function buildNetwork(src: Sources): Network {
     today, me: g.me,
     worlds: contexts.filter((c) => c.depth === 1),
     contexts,
-    people: [...people.values()].map((p) => derive(p, today)),
+    people: [...people.values()],
     links: deduped,
     sources,
     excluded: net.excluded,
@@ -478,27 +402,67 @@ export function isSocial(l: Link): boolean {
   return l.kind !== 'member' && l.kind !== 'part';
 }
 
+export interface IntroStep { id: string; why: string }
+
 /**
- * Shortest chain of people from someone Nat has met to `target`, over social links.
- * Returns ids [first contact, …, target], or null if there's no chain.
+ * The best chain of people from someone you know to `target` (someone you haven't met).
+ * Direct person-to-person links count most; sharing a small group (40 people or fewer,
+ * not a whole world) counts as a weaker link. Returns [someone you know, …, target], or null.
  */
-export function warmPath(net: Network, target: string): string[] | null {
+export function introPath(net: Network, target: string): IntroStep[] | null {
   const byId = new Map(net.people.map((p) => [p.id, p]));
   const t = byId.get(target);
   if (!t || t.met) return null;
-  const adj = new Map<string, string[]>();
-  const add = (a: string, b: string) => { if (!adj.has(a)) adj.set(a, []); adj.get(a)!.push(b); };
-  for (const l of net.links) if (isSocial(l)) { add(l.a, l.b); add(l.b, l.a); }
-  const prev = new Map<string, string | null>();
-  const queue: string[] = [];
-  for (const p of net.people) if (p.met) { prev.set(p.id, null); queue.push(p.id); }
-  while (queue.length) {
-    const cur = queue.shift()!;
+  const ctx = new Map(net.contexts.map((c) => [c.id, c]));
+  const small = new Map<string, string[]>();
+  for (const c of net.contexts) if (c.depth > 1 && c.members >= 2 && c.members <= 40) small.set(c.id, []);
+  for (const p of net.people) for (const c of p.contexts) small.get(c)?.push(p.id);
+  const social = new Map<string, { to: string; why: string }[]>();
+  const add = (a: string, b: string, why: string) => { if (!social.has(a)) social.set(a, []); social.get(a)!.push({ to: b, why }); };
+  for (const l of net.links) {
+    if (!isSocial(l) || !byId.has(l.a) || !byId.has(l.b)) continue;
+    const why = l.label ?? LINK_LABEL[l.kind];
+    add(l.a, l.b, why); add(l.b, l.a, why);
+  }
+  const dist = new Map<string, number>();
+  const prev = new Map<string, { from: string; why: string } | null>();
+  const open = new Set<string>();
+  for (const p of net.people) if (p.met && p.id !== target) { dist.set(p.id, 0); prev.set(p.id, null); open.add(p.id); }
+  while (open.size) {
+    let cur = '', best = Infinity;
+    for (const id of open) { const d = dist.get(id)!; if (d < best) { best = d; cur = id; } }
+    open.delete(cur);
     if (cur === target) break;
-    for (const n of adj.get(cur) ?? []) if (!prev.has(n) && byId.has(n)) { prev.set(n, cur); queue.push(n); }
+    const relax = (to: string, w: number, why: string) => {
+      if (!byId.has(to) || (byId.get(to)!.met && to !== target)) return; // no point routing through someone you know
+      if (best + w < (dist.get(to) ?? Infinity)) { dist.set(to, best + w); prev.set(to, { from: cur, why }); open.add(to); }
+    };
+    for (const e of social.get(cur) ?? []) relax(e.to, 1, e.why);
+    for (const c of byId.get(cur)!.contexts) for (const m of small.get(c) ?? []) if (m !== cur) relax(m, 2, `Both in ${ctx.get(c)!.name}`);
   }
   if (!prev.has(target)) return null;
-  const path: string[] = [];
-  for (let c: string | null = target; c; c = prev.get(c) ?? null) path.unshift(c);
-  return path;
+  const steps: IntroStep[] = [];
+  for (let c: string | null = target; c;) {
+    const p = prev.get(c);
+    steps.unshift({ id: c, why: p ? p.why : 'Someone you know' });
+    c = p?.from ?? null;
+  }
+  // "Both in X" / link labels describe the hop into each step; name both ends so it reads on its own.
+  return steps.map((st, i) => (i === 0 ? st : { ...st, why: `${byId.get(steps[i - 1].id)!.name} → ${byId.get(st.id)!.name}: ${st.why}` }));
+}
+
+/** Plain text to paste into a message: the path, or a short intro request to the first person on it. */
+export function introText(net: Network, target: string, kind: 'path' | 'ask'): string {
+  const steps = introPath(net, target);
+  const byId = new Map(net.people.map((p) => [p.id, p]));
+  const t = byId.get(target);
+  if (!steps || !t) return '';
+  const label = (id: string) => { const p = byId.get(id)!; return p.org ? `${p.name} (${p.org})` : p.name; };
+  if (kind === 'path') {
+    return [`Intro path to ${label(target)}:`, `You → ${steps.map((s) => label(s.id)).join(' → ')}`, ...steps.slice(1).map((s) => `• ${s.why}`)].join('\n');
+  }
+  const first = byId.get(steps[0].id)!.name.split(/\s+/)[0];
+  const next = steps[1];
+  const whom = next.id === target ? label(target) : `${label(next.id)}, who could connect me with ${label(target)}`;
+  return `Hi ${first}, would you be open to introducing me to ${whom}? I’m hoping to learn more about their work. Happy to send a short blurb you can forward. Thank you!`;
 }

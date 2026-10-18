@@ -10,7 +10,8 @@
     "test": "vitest run",
     "build:public": "tsc --noEmit && vite build --mode public",
     "check:public": "sh scripts/check-public.sh",
-    "export:live": "vite-node scripts/export-live.ts"
+    "export:live": "vite-node scripts/export-live.ts",
+    "test:browsers": "node e2e/smoke.mjs"
   },
   "dependencies": {
     "@types/d3-drag": "^3.0.7",
@@ -19,15 +20,17 @@
     "d3-interpolate": "^3.0.1",
     "d3-selection": "^3.0.0",
     "d3-zoom": "^3.0.0",
-    "fflate": "^0.8.2"
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@types/d3-force": "^3.0.10",
     "@types/d3-interpolate": "^3.0.4",
     "@types/d3-selection": "^3.0.11",
     "@types/d3-zoom": "^3.0.8",
+    "playwright": "^1.64.1",
     "typescript": "^5.6.3",
-    "vite": "^5.4.10",
-    "vitest": "^2.1.9"
+    "vite": "^8.3.4",
+    "vite-node": "^6.0.0",
+    "vitest": "^5.0.5"
   }
 }

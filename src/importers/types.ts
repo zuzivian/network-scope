@@ -1,7 +1,7 @@
 // Shared shapes for the in-browser importers. Parsers are pure functions:
 // text (or parsed JSON) in, ImportResult out. Nothing here touches storage or the network.
 
-export type ImportKind = 'linkedin' | 'vcard' | 'csv' | 'whatsapp' | 'facebook' | 'instagram';
+export type ImportKind = 'linkedin' | 'vcard' | 'csv' | 'whatsapp' | 'facebook' | 'instagram' | 'calendar';
 
 export interface ImportedPerson {
   /** Display name with tags stripped ("MAJ Alex Rivera 140" -> "Alex Rivera"). */
@@ -16,8 +16,8 @@ export interface ImportedPerson {
   rank?: string;
   /** Group/label/category names this person belongs to in the source (vCard CATEGORIES, chat group). */
   groups: string[];
-  /** YYYY-MM-DD of the last interaction the source knows about (a chat message, etc.). */
-  lastContact?: string;
+  /** How many meetings you had together (calendar imports). */
+  meetings?: number;
   /** YYYY-MM-DD the connection was made (LinkedIn "Connected On", Facebook friend timestamp). */
   connectedOn?: string;
   /** Mapped status text from a CRM-like CSV ("Met once", "Following up"), if a column was mapped. */
@@ -50,7 +50,6 @@ export interface CsvMapping {
   role?: string;
   /** Columns whose values are group/context names. A cell may hold several, separated by , ; or ::: */
   groups: string[];
-  lastContact?: string;
   status?: string;
   notes?: string;
   url?: string;

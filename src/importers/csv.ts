@@ -3,6 +3,7 @@
 // Contact details (email, phone, address, birthday) are never copied into results.
 
 import type { CsvMapping, CsvPreset, ImportKind, ImportResult, ImportedPerson } from './types';
+import { orgFromEmail } from './email';
 import { makePerson } from './tags';
 
 // ---------- parsing ----------
@@ -140,7 +141,7 @@ function pickAll(headers: string[], names: string[]): string[] {
 
 function compact(m: CsvMapping): CsvMapping {
   const out: CsvMapping = { groups: m.groups };
-  for (const k of ['name', 'firstName', 'lastName', 'org', 'role', 'lastContact', 'status', 'notes', 'url'] as const) {
+  for (const k of ['name', 'firstName', 'lastName', 'org', 'role', 'status', 'notes', 'url'] as const) {
     if (m[k] !== undefined) out[k] = m[k];
   }
   return out;
@@ -207,7 +208,6 @@ export function detectPreset(headers: string[]): { preset: CsvPreset; mapping: C
         role: pick(headers, ['role', 'position', 'job title', 'title']),
         status: pick(headers, ['status']),
         groups: pickAll(headers, ['tags', 'where met', 'how we met']),
-        lastContact: pick(headers, ['last contacted', 'last met', 'last touchpoint', 'date']),
       }),
     };
   }
@@ -223,7 +223,6 @@ export function detectPreset(headers: string[]): { preset: CsvPreset; mapping: C
       role: pick(headers, ['title', 'position', 'job title', 'role']),
       status: pick(headers, ['status']),
       url: pick(headers, ['url', 'profile url', 'linkedin url', 'linkedin']),
-      lastContact: pick(headers, ['last contact', 'last contacted', 'last met', 'last seen', 'date']),
       groups: pickAll(headers, [
         'group', 'groups', 'label', 'labels', 'tag', 'tags', 'category', 'categories', 'circle', 'team', 'where met',
       ]),
@@ -261,13 +260,13 @@ export function csvToResult(
   const idx = (h?: string) => (h === undefined ? -1 : headers.indexOf(h));
   const cell = (row: string[], i: number) => (i >= 0 ? (row[i] ?? '').trim() : '');
 
+  const emailCols = headers.map((h, i) => (/e-?mail/i.test(h) ? i : -1)).filter((i) => i >= 0);
   const col = {
     name: idx(mapping.name),
     first: idx(mapping.firstName),
     last: idx(mapping.lastName),
     org: idx(mapping.org),
     role: idx(mapping.role),
-    lastContact: idx(mapping.lastContact),
     status: idx(mapping.status),
     notes: idx(mapping.notes),
     url: idx(mapping.url),
@@ -285,7 +284,8 @@ export function csvToResult(
       skipped++;
       continue;
     }
-    const org = cell(row, col.org) || undefined;
+    // No company column (or it's blank): fall back to the domain of their email, never the address.
+    const org = cell(row, col.org) || emailCols.map((i) => orgFromEmail(cell(row, i))).find(Boolean) || undefined;
     const role = cell(row, col.role) || undefined;
     const person = makePerson(raw, { org, role });
 
@@ -295,8 +295,6 @@ export function csvToResult(
     }
     person.groups = groups;
 
-    const lastContact = parseLooseDate(cell(row, col.lastContact));
-    if (lastContact) person.lastContact = lastContact;
     const connectedOn = parseLooseDate(cell(row, col.connectedOn));
     if (connectedOn) person.connectedOn = connectedOn;
     const status = cell(row, col.status);
@@ -315,7 +313,7 @@ export function csvToResult(
   }
 
   const mapped = new Set<string>(
-    [mapping.name, mapping.firstName, mapping.lastName, mapping.org, mapping.role, mapping.lastContact,
+    [mapping.name, mapping.firstName, mapping.lastName, mapping.org, mapping.role,
       mapping.status, mapping.notes, mapping.url, options.connectedOnColumn, ...mapping.groups]
       .filter((h): h is string => h !== undefined),
   );

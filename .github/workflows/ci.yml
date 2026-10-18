@@ -17,3 +17,16 @@ jobs:
       - run: npm run build:public
       # The public bundle must never contain local-mode code (dev endpoints, data/ loaders).
       - run: "! grep -rq -e '/api/assignments' -e '/api/reimport' dist"
+  browsers:
+    # The whole first-visit journey in Chromium, Firefox and WebKit (Safari's engine), desktop and phone.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run build:public
+      - run: npm run test:browsers

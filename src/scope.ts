@@ -127,11 +127,11 @@ export function mountScope(host: HTMLElement, net: Network, onSelect: (id: strin
     // Me
     const me = view.append('g').attr('class', 'me');
     me.append('circle').attr('r', RING_EDGES[0] * R * 0.55);
-    me.append('text').attr('dy', '0.35em').text('NW');
+    me.append('text').attr('dy', '0.35em').text(net.me.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase());
 
     // Blips
     const blips = view.append('g').attr('class', 'blips').selectAll<SVGGElement, Placed>('g').data(placed).join('g')
-      .attr('class', (d) => `blip ring-${d.node.ring}${d.node.warmth == null ? ' never' : ''}${d.node.flags.length ? ' flagged' : ''}${d.showLabel ? ' labelled' : ''}`)
+      .attr('class', (d) => `blip ring-${d.node.ring}${d.node.met ? '' : ' never'}${d.showLabel ? ' labelled' : ''}`)
       .attr('data-id', (d) => d.node.id)
       .attr('transform', (d) => `translate(${d.x},${d.y})`)
       .attr('tabindex', 0)
@@ -148,9 +148,8 @@ export function mountScope(host: HTMLElement, net: Network, onSelect: (id: strin
       this.appendChild(h);
       halos.set(d.node.id, h);
     });
-    blips.filter((d) => d.node.flags.length > 0).append('circle').attr('class', 'alert').attr('r', (d) => d.size + 3.5);
     blips.append('circle').attr('class', 'core').attr('r', (d) => d.size)
-      .style('fill-opacity', (d) => (!d.node.met ? 0 : d.node.warmth == null ? 0.5 : 0.18 + 0.82 * d.node.warmth));
+      .style('fill-opacity', (d) => (!d.node.met ? 0 : ({ 1: 1, 2: 0.8, 3: 0.45, 4: 0.3 } as Record<number, number>)[d.node.ring]));
     blips.append('text').attr('class', 'label')
       .attr('x', (d) => (d.labelLeft ? -(d.size + 5) : d.size + 5))
       .attr('dy', '0.35em')
@@ -171,11 +170,10 @@ export function mountScope(host: HTMLElement, net: Network, onSelect: (id: strin
       const n = d.node;
       const hidden = n.worlds.every((w) => s.hidden.has(w));
       const matches = !q || `${n.name} ${n.org ?? ''} ${n.role ?? ''}`.toLowerCase().includes(q);
-      const attn = !s.attentionOnly || n.flags.length > 0;
       const g = select(this);
       g.classed('selected', n.id === sel)
         .classed('linked', linked.has(n.id))
-        .classed('dim', hidden || !matches || !attn || (!!sel && n.id !== sel && !linked.has(n.id)))
+        .classed('dim', hidden || !matches || (!!sel && n.id !== sel && !linked.has(n.id)))
         .classed('match', !!q && matches && !hidden);
     });
     view.selectAll<SVGTextElement, Sector>('.sector-label').classed('dim', function () {
@@ -194,10 +192,9 @@ export function mountScope(host: HTMLElement, net: Network, onSelect: (id: strin
     if (p) {
       const start = toXY(p.bearing, RING_EDGES[0] * R * 0.55);
       spoke.append('line').attr('x1', start.x).attr('y1', start.y).attr('x2', p.x).attr('y2', p.y);
-      const days = p.node.daysSince == null ? (p.node.met ? 'no date' : 'never') : `${p.node.daysSince}d`;
       const mid = { x: (start.x + p.x) / 2, y: (start.y + p.y) / 2 };
       spoke.append('text').attr('x', mid.x).attr('y', mid.y - 6).attr('text-anchor', 'middle')
-        .text(`BRG ${String(Math.round(p.bearing)).padStart(3, '0')} · ${RINGS[p.node.ring - 1].label.toUpperCase()} · ${days}`);
+        .text(`BRG ${String(Math.round(p.bearing)).padStart(3, '0')} · ${RINGS[p.node.ring - 1].label.toUpperCase()}${p.node.met ? '' : ' · NOT MET'}`);
     }
   }
 
@@ -208,7 +205,7 @@ export function mountScope(host: HTMLElement, net: Network, onSelect: (id: strin
       const h = halos.get(p.node.id);
       if (!h) continue;
       const delta = (angle - p.bearing + 360) % 360;
-      h.style.opacity = delta < TRAIL ? String((1 - delta / TRAIL) * (p.node.warmth == null ? 0.25 : 0.4 + 0.6 * p.node.warmth)) : '0';
+      h.style.opacity = delta < TRAIL ? String((1 - delta / TRAIL) * (p.node.ring <= 2 ? 0.8 : 0.4)) : '0';
     }
     raf = requestAnimationFrame(tick);
   }

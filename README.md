@@ -20,6 +20,7 @@ Open the **Data** screen and drop in any of these (or a .zip of them):
 | iPhone / Mac / Google contacts | vCard (`.vcf`) export |
 | Google, Outlook or Notion | CSV export (you confirm the column mapping) |
 | WhatsApp | an exported chat `.txt` (who spoke and when; message text is never kept) |
+| Calendar | `.ics` export from Google, Outlook or Apple Calendar: who you meet, how often, recurring meetings as groups |
 | Facebook / Instagram | `friends.json`, `followers_1.json`, `following.json` from the data download |
 
 Drop LinkedIn's whole export zip rather than just `Connections.csv`: it includes your own education and jobs, so classmates and colleagues land in the right world (by their company, or by when you connected while at school) instead of one catch-all. Groups, labels and shared companies become contexts. Tags in contact names ("Alex Rivera MBA'28", "Lena Brightwater (Run club)") can be mapped to contexts, and the **Sort** view places everyone else one keystroke at a time.
@@ -28,7 +29,9 @@ Drop LinkedIn's whole export zip rather than just `Connections.csv`: it includes
 
 - Files are parsed on your device (`src/importers/`, pure functions with tests). Phone numbers, emails, addresses, notes and chat message text are dropped at parse time; `privacy.test.ts` checks that for every parser.
 - Your network is saved in this browser's IndexedDB. **Download a backup** moves it to another device; **Delete everything** removes it.
-- No server, accounts, analytics or cookies. The page ships a Content-Security-Policy with `connect-src 'none'`, so the browser blocks any request that could carry your data away. The only outside request is Google Fonts.
+- No server, accounts, analytics or cookies. The page ships a Content-Security-Policy whose `connect-src` allows only the feedback form (Formspree, sent only when you press Send, carrying only what you typed), so the browser blocks any other request that could carry your data away. Fonts come from Google Fonts. The full explanation is [privacy.html](public/privacy.html).
+- The app asks the browser for persistent storage, tracks your last backup and warns when the browser may clear the map (Safari does after 7 days without a visit; installing to the Home Screen avoids it).
+- People with the same name at different companies stay separate and are listed under **Data → Possible duplicates**, along with nickname pairs (Bob / Robert Smith), to merge or keep apart.
 
 ## The model
 
@@ -36,11 +39,11 @@ A graph with three kinds of node and two kinds of edge.
 
 - **Nodes:** you (centre) → **worlds** (ringed circles) → **contexts** inside them (diamonds) → **people** (dots).
 - **Structural edges:** world → context → person. Someone in several contexts gets several edges, so people who span worlds (**bridges**) sit between clusters.
-- **Social edges:** partner/family (solid), intro/warm path (dashed), knows (dotted).
-- **Person dot:** brightness = recency (halves every half-life days), hollow = not met yet, amber ring = follow-up due, thank-you owed or gone quiet.
-- **Warm path:** for anyone you haven't met, the shortest chain of social edges from someone you have.
+- **Social edges:** partner/family (solid), intro (dashed), knows (dotted).
+- **Person dot:** darker = closer; hollow = not met yet. Core and active people glow softly.
+- **Intro path:** for anyone you haven't met, the best chain from someone you know: direct links first, then people who share a small group with them. Copy it as text, or as a ready-to-send intro request.
 
-Colour does one job (recency, plus amber for attention); worlds are shown by structure and labels, which holds up under colour-vision deficiency. The **Scope** view is the same data on a radar: bearing = world, ring = closeness.
+Colour does one job (closeness, in one indigo); worlds are shown by structure and labels, which holds up under colour-vision deficiency. The **Scope** view is the same data on a radar: bearing = world, ring = closeness.
 
 ## Local mode
 
@@ -56,10 +59,11 @@ Pushes to `main` deploy to Vercel through its GitHub integration (`vercel.json`:
 
 ## Code
 
-- `src/model.ts`: types, source adapters, derived recency and flags
+- `src/model.ts`: types, source adapters, intro paths
 - `src/graph.ts`: force-directed graph (d3-force, drag, zoom, focus, label placement)
 - `src/layout.ts`, `src/scope.ts`: the radar Scope view
-- `src/panel.ts`: readout, person and context dossiers, warm paths
+- `src/panel.ts`: readout, person and context dossiers, intro paths
+- `src/tips.ts`, `src/feedback.ts`: guided tips, feedback form
 - `src/importers/`: in-browser parsers and tag extraction
 - `src/workspace.ts`: the browser workspace (IndexedDB), import merging, tag rules, backup and restore
 - `src/dataview.ts`: Data screen; `src/sort.ts`, `src/browser-sort.ts`: Sort

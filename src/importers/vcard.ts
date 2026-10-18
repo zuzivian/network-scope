@@ -2,6 +2,7 @@
 // phone, email, address, birthday, notes and photos are skipped (their property names are
 // reported in `dropped`).
 
+import { orgFromEmail } from './email';
 import { makePerson } from './tags';
 import type { ImportResult, ImportedPerson } from './types';
 
@@ -69,6 +70,8 @@ interface Card {
   fn?: string;
   n?: string[];
   org?: string;
+  /** Organisation from an email domain, used only when the card has no ORG. */
+  emailOrg?: string;
   title?: string;
   categories: string[];
 }
@@ -89,7 +92,7 @@ export function parseVCards(text: string): ImportResult {
       skipped++;
       return;
     }
-    const person = makePerson(raw, { org: c.org || undefined, role: c.title || undefined });
+    const person = makePerson(raw, { org: c.org || c.emailOrg || undefined, role: c.title || undefined });
     person.groups = [...new Set(c.categories)];
     people.push(person);
     for (const g of person.groups) {
@@ -119,6 +122,7 @@ export function parseVCards(text: string): ImportResult {
 
     if (DROPPED_PROPS.has(prop)) {
       if (!dropped.includes(prop)) dropped.push(prop);
+      if (prop === 'EMAIL') card.emailOrg ??= orgFromEmail(line.slice(colon + 1));
       continue;
     }
     if (!['FN', 'N', 'ORG', 'TITLE', 'CATEGORIES'].includes(prop)) continue;

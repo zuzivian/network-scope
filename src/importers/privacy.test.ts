@@ -55,3 +55,18 @@ describe('privacy', () => {
     });
   }
 });
+
+describe('email domains', () => {
+  it('keep only an organisation label, never the address', async () => {
+    const { orgFromEmail } = await import('./email');
+    expect(orgFromEmail('jo@mckinsey.com')).toBe('Mckinsey');
+    expect(orgFromEmail('sam@gsb.stanford.edu')).toBe('Stanford');
+    expect(orgFromEmail('a@bcg.com')).toBe('BCG');
+    expect(orgFromEmail('x@company.com.sg')).toBe('Company');
+    expect(orgFromEmail('me@gmail.com')).toBeUndefined();
+    expect(orgFromEmail('me@icloud.com')).toBeUndefined();
+    const r = importFile({ name: 'c.vcf', text: 'BEGIN:VCARD\nFN:Ivy Jones\nEMAIL;type=work:ivy.jones@bain.com\nEND:VCARD' });
+    expect('people' in r && r.people[0].org).toBe('Bain');
+    expect(JSON.stringify(r)).not.toContain('ivy.jones');
+  });
+});

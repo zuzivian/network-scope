@@ -1,5 +1,6 @@
 // Entry point for the importers: dispatch a dropped file to the right parser.
 
+import { isCalendar, parseCalendar } from './calendar';
 import { detectPreset, parseCSV } from './csv';
 import { isLinkedInCsv, parseLinkedInConnections } from './linkedin';
 import { detectJson, parseFacebookFriends, parseInstagram } from './social';
@@ -7,6 +8,7 @@ import { parseVCards } from './vcard';
 import { parseWhatsAppChat } from './whatsapp';
 import type { CsvMapping, CsvPreset, ImportResult } from './types';
 
+export * from './calendar';
 export * from './csv';
 export * from './linkedin';
 export * from './social';
@@ -29,6 +31,12 @@ export function importFile(file: { name: string; text: string }): ImportResult |
   const ext = /\.([^./\\]+)$/.exec(file.name)?.[1]?.toLowerCase() ?? '';
 
   if (ext === 'vcf' || ext === 'vcard') return parseVCards(file.text);
+
+  if (ext === 'ics' || isCalendar(file.text)) {
+    // Google names exports after your address: never let that become a label.
+    const base = (file.name.split('/').pop() ?? '').replace(/\.ics$/i, '');
+    return parseCalendar(file.text, base.includes('@') || /^(calendar|basic|export)$/i.test(base) || !base ? 'Calendar' : `Calendar: ${base}`);
+  }
 
   if (ext === 'csv' || ext === 'tsv') {
     if (isLinkedInCsv(file.text)) return parseLinkedInConnections(file.text);
@@ -55,5 +63,5 @@ export function importFile(file: { name: string; text: string }): ImportResult |
     );
   }
 
-  throw new Error(`Unsupported file type${ext ? ` ".${ext}"` : ''}. Drop a .vcf, .csv, WhatsApp .txt or Facebook/Instagram .json file.`);
+  throw new Error(`Unsupported file type${ext ? ` ".${ext}"` : ''}. Drop a .vcf, .csv, .ics, WhatsApp .txt or Facebook/Instagram .json file.`);
 }

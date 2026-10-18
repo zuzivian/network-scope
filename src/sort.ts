@@ -190,7 +190,6 @@ export function mountSort(host: HTMLElement, panel: () => HTMLElement, net: Netw
           <p class="raw">Saved as “${esc(c.raw)}”</p>
           <div class="chips">${c.rank ? `<span class="chip rank">${esc(c.rank)}</span>` : ''}${tagChips}
             ${c.inVault ? '<span class="chip vault">In your vault</span>' : ''}</div>
-          <p class="fine">${c.lastContact ? `Last WhatsApp chat ${esc(c.lastContact)}` : 'No WhatsApp chat since June 2026'}</p>
           <div class="suggest">${c.suggested.length
             ? `<button class="accept" data-accept>Enter · ${esc(c.suggested.map((id) => m.get(id)?.name ?? id).join(' + '))}</button>`
             : '<span class="fine">No suggestion</span>'}
@@ -230,7 +229,7 @@ export function mountSort(host: HTMLElement, panel: () => HTMLElement, net: Netw
         <header><h3>${esc(label)} <span class="count">${xs.length}</span></h3>
           ${k ? `<button class="accept" data-confirm="${esc(k)}" ${n ? '' : 'disabled'}>Confirm ${n}</button>` : '<span class="fine">Switch to one at a time for these</span>'}</header>
         <ul>${xs.slice(0, 200).map((x) => `<li><label><input type="checkbox" data-tick="${x.key}" ${!k ? 'disabled' : unticked.has(x.key) ? '' : 'checked'} />
-          <b>${esc(x.name)}</b><small>${esc(x.raw)}${x.notion ? ' · in Notion' : ''}${x.lastContact ? ` · chat ${esc(x.lastContact)}` : ''}</small></label>
+          <b>${esc(x.name)}</b><small>${esc(x.raw)}${x.notion ? ' · in Notion' : ''}</small></label>
           <button class="mini" data-exclude="${x.key}" title="Not in my network">X</button></li>`).join('')}</ul>
       </section>`;
     }).join('');

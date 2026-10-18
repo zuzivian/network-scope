@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>How privacy works · Network Scope</title>
+  <meta name="description" content="How Network Scope keeps your network on your device, and how to check for yourself." />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root { --bg: #fff; --ink: #111113; --ink-2: #3f4147; --ink-3: #63666d; --line: #e4e4e7; --accent: #4f46e5; --soft: #f4f4f5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 15.5px/1.6 'IBM Plex Sans', system-ui, sans-serif; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+    a { color: var(--accent); }
+    .back { font: 500 12px 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.06em; text-decoration: none; }
+    h1 { font: 700 34px/1.15 'Space Grotesk', sans-serif; letter-spacing: -0.02em; margin: 18px 0 10px; }
+    h2 { font: 600 19px/1.3 'Space Grotesk', sans-serif; margin: 34px 0 8px; }
+    .lead { font-size: 17px; color: var(--ink-2); margin: 0 0 8px; }
+    p, li { color: var(--ink-2); }
+    ul { padding-left: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0; }
+    th, td { text-align: left; vertical-align: top; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); }
+    th { font: 500 11px 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
+    code { font: 13px 'IBM Plex Mono', monospace; background: var(--soft); padding: 1px 5px; border-radius: 3px; }
+    .note { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; }
+    @media (max-width: 560px) { h1 { font-size: 27px; } table { font-size: 13px; } }
+  </style>
+</head>
+<body>
+<main>
+  <a class="back" href="/">← Network Scope</a>
+  <h1>How privacy works</h1>
+  <p class="lead">Your network never leaves your device. There is no server that receives it, no account, no analytics and no cookies.</p>
+
+  <h2>What happens when you add a file</h2>
+  <ul>
+    <li>The file is read by code running in this page, in your browser. It is not uploaded anywhere.</li>
+    <li>Contact details are dropped as the file is read, before anything is saved: see the table below.</li>
+    <li>What's left is saved in your browser's own storage for this site (IndexedDB). Other sites can't read it, and neither can we.</li>
+  </ul>
+
+  <h2>What's kept from each source</h2>
+  <table>
+    <thead><tr><th>Source</th><th>Kept</th><th>Never kept</th></tr></thead>
+    <tbody>
+      <tr><td>LinkedIn</td><td>Names, company, title, connection date, profile link; your own schools and jobs with their years</td><td>Email addresses, messages, invitations, everything else in the export</td></tr>
+      <tr><td>Phone contacts</td><td>Names, company, title, groups; an organisation label from a work email's domain</td><td>Phone numbers, email addresses, postal addresses, birthdays, notes, photos</td></tr>
+      <tr><td>Calendar</td><td>Attendee names, an organisation label from their email domain, how often you meet, recurring meeting titles</td><td>Email addresses, one-off meeting titles, descriptions, locations, dial-ins, dates</td></tr>
+      <tr><td>WhatsApp chat</td><td>Who spoke, and the group name</td><td>Message text, timestamps, unsaved phone numbers</td></tr>
+      <tr><td>Spreadsheet</td><td>Only the columns you pick</td><td>Every other column</td></tr>
+      <tr><td>Facebook, Instagram</td><td>Names (and profile handles for Instagram)</td><td>Everything else</td></tr>
+    </tbody>
+  </table>
+
+  <h2>The only things this page sends over the internet</h2>
+  <ul>
+    <li><b>Fonts</b> from Google Fonts, when the page loads.</li>
+    <li><b>Feedback</b>, only when you press Send in the feedback form, and only what you typed there. It goes to the maintainer through Formspree. Your map is never included.</li>
+  </ul>
+  <p class="note">The page enforces this itself: it ships a Content-Security-Policy whose <code>connect-src</code> allows only the feedback form's address. Your browser refuses any other request the page might try to make, so even a bug can't send your data elsewhere.</p>
+
+  <h2>Check it yourself</h2>
+  <ul>
+    <li>Open your browser's developer tools, go to the <b>Network</b> tab, and add a file. You'll see no request carrying it.</li>
+    <li>In the same tools, look at the page's response headers for <code>content-security-policy</code>.</li>
+    <li>All the code is public: <a href="https://github.com/zuzivian/network-scope">github.com/zuzivian/network-scope</a>. The importers live in <code>src/importers/</code>, with tests that check each one drops contact details.</li>
+  </ul>
+
+  <h2>Keeping and deleting your map</h2>
+  <ul>
+    <li>Your map stays in this browser on this device. Some browsers can clear site data (Safari after 7 days without a visit, any browser when storage runs low), so download a backup now and then from <b>Data → Storage</b>. On iPhone or iPad, <b>Add to Home Screen</b> keeps it from being cleared.</li>
+    <li>A backup is a file on your computer. Restore it in any browser to carry on there.</li>
+    <li><b>Data → Storage → Delete everything in this browser</b> removes it all, immediately.</li>
+  </ul>
+
+  <p><a href="/">Back to Network Scope</a></p>
+</main>
+</body>
+</html>
