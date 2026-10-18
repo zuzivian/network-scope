@@ -1,7 +1,7 @@
 // Data screen: import files, map tags, edit contexts, back up or wipe the browser workspace.
 // Every file is read with FileReader/fflate on this device. Nothing is uploaded.
 import { unzipSync, strFromU8 } from 'fflate';
-import { csvToResult, importFile } from './importers';
+import { csvToResult, importFile, parseProfile, profileKind, type TimelineEntry } from './importers';
 import type { CsvMapping, CsvPreset, ImportResult } from './importers/types';
 import type { Sources } from './model';
 import {
@@ -38,7 +38,7 @@ interface Pending {
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 /** Files worth reading inside an export zip. Everything else (messages, ads data…) is skipped unread. */
-const ZIP_KEEP = /(^|\/)(connections\.csv|_chat\.txt|[^/]*\.vcf|friends[^/]*\.json|followers[^/]*\.json|following[^/]*\.json)$/i;
+const ZIP_KEEP = /(^|\/)(connections\.csv|education\.csv|positions\.csv|_chat\.txt|[^/]*\.vcf|friends[^/]*\.json|followers[^/]*\.json|following[^/]*\.json)$/i;
 
 const GUIDES: { title: string; steps: string }[] = [
   { title: 'LinkedIn connections', steps: 'LinkedIn → Me → Settings & Privacy → Data privacy → Get a copy of your data → pick “Connections” → Request archive. The email link gives a zip; drop the zip or Connections.csv here. Email addresses are dropped.' },
@@ -84,6 +84,8 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
   const pending: Pending[] = [];
   let flash = '';
   let source: string | null = null;
+  /** Your own schools and jobs, read from LinkedIn's Education.csv / Positions.csv when they come along. */
+  let profile: TimelineEntry[] = [];
 
   const worlds = () => ws.contexts.filter((c) => c.parent === 'me');
   const ctxPath = (id: string) => {
@@ -110,6 +112,7 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
   // ---------- Reading files ----------
 
   async function readFiles(files: FileList | File[]) {
+    const had = profile.length;
     for (const f of Array.from(files)) {
       if (/\.zip$/i.test(f.name)) {
         try {
@@ -126,6 +129,9 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
         pending.push(newPending(f.name, { error: 'Unsupported file type. Use .csv, .vcf, .txt (WhatsApp), .json (Facebook/Instagram) or a .zip of those.' }));
       }
     }
+    if (profile.length > had && !pending.some((p) => p.result?.kind === 'linkedin' && !p.done)) {
+      pending.push(newPending('Your LinkedIn profile', { done: `${profile.length - had} schools and jobs found. Add your Connections.csv and they’ll place people in the right worlds.` }));
+    }
     render();
   }
 
@@ -134,6 +140,10 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
   }
 
   function addText(label: string, name: string, text: string) {
+    if (/\.csv$/i.test(name) && profileKind(text)) {
+      profile = [...profile, ...parseProfile(text)];
+      return;
+    }
     try {
       const r = importFile({ name, text });
       if ('needsMapping' in r) pending.push(newPending(label, { csv: { headers: r.headers, rows: r.rows, preset: r.preset, mapping: r.mapping } }));
@@ -252,6 +262,7 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
     return `<article class="pending">
       <header><b>${esc(r.source)}</b><small>${esc(p.file)}</small></header>
       <p class="counts">${r.people.length} people${r.groups.length ? ` · ${r.groups.length} groups` : ''}${shared ? ` · ${shared} shared companies` : ''}</p>
+      ${r.kind === 'linkedin' ? timelineNote() : ''}
       ${r.dropped.length ? `<p class="fine">Not kept: ${esc(r.dropped.join(', '))}</p>` : ''}
       ${r.warnings.map((w) => `<p class="fine warn">${esc(w)}</p>`).join('')}
       <p class="fine">e.g. ${esc(r.people.slice(0, 6).map((x) => x.name).join(', '))}${r.people.length > 6 ? '…' : ''}</p>
@@ -263,6 +274,16 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
         <label class="you">Your name, so you’re left out <input id="me-name" value="${esc(ws.me.name === 'Me' ? '' : ws.me.name)}" placeholder="e.g. Jordan Lee" /></label>
       </div></details>
     </article>`;
+  }
+
+  /** What a LinkedIn import will use to place people, or how to get it. */
+  function timelineNote() {
+    const t = profile.length ? profile : ws.timeline ?? [];
+    if (!t.length) return `<p class="fine">Tip: drop LinkedIn’s whole export zip (not just Connections.csv). It includes your own education and jobs, which place classmates and colleagues in the right worlds.</p>`;
+    const yr = (d?: string) => d?.slice(0, 4) ?? 'now';
+    const seen = new Set<string>();
+    const chapters = t.filter((x) => !seen.has(x.org) && seen.add(x.org)).map((x) => `${esc(x.org)} ${yr(x.start)}–${yr(x.end)}`);
+    return `<p class="fine">Placed using your own profile: ${chapters.join(' · ')}. People from these schools and jobs, or who you connected with while at school, go in those worlds.</p>`;
   }
 
   function mappingCard(p: Pending) {
@@ -423,6 +444,7 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
     if (b('[data-commit]')) {
       const p = find(b('[data-commit]')!.dataset.commit)!;
       const first = ws.people.length === 0;
+      if (p.result!.kind === 'linkedin' && profile.length) ws.timeline = profile;
       const r = mergeImport(ws, p.result!, { world: p.world, groupContexts: p.groupContexts, companyContexts: p.companyContexts });
       p.done = `${r.added} added, ${r.updated} matched people you already had.`;
       if (first && !pending.some((x) => x.result && !x.done)) {

@@ -22,7 +22,7 @@ Open the **Data** screen and drop in any of these (or a .zip of them):
 | WhatsApp | an exported chat `.txt` (who spoke and when; message text is never kept) |
 | Facebook / Instagram | `friends.json`, `followers_1.json`, `following.json` from the data download |
 
-Groups, labels and shared companies become contexts. Tags in contact names ("Alex Rivera MBA'28", "Lena Brightwater (Run club)") can be mapped to contexts, and the **Sort** view places everyone else one keystroke at a time.
+Drop LinkedIn's whole export zip rather than just `Connections.csv`: it includes your own education and jobs, so classmates and colleagues land in the right world (by their company, or by when you connected while at school) instead of one catch-all. Groups, labels and shared companies become contexts. Tags in contact names ("Alex Rivera MBA'28", "Lena Brightwater (Run club)") can be mapped to contexts, and the **Sort** view places everyone else one keystroke at a time.
 
 ## Privacy
 

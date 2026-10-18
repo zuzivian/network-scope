@@ -1,5 +1,6 @@
 // Browser mode: a visitor's whole network lives in this browser's IndexedDB.
 // Files are parsed on the device (src/importers) and merged here; nothing is sent anywhere.
+import { sameOrg, type TimelineEntry } from './importers/linkedin';
 import type { ImportKind, ImportResult } from './importers/types';
 import type { GraphFile, LinkKind, Sources } from './model';
 import { slug } from './model';
@@ -41,6 +42,8 @@ export interface Workspace {
   tagRules: Record<string, string[]>;
   decisions: Record<string, Decision>;
   imports: { id: string; kind: ImportKind | 'workspace'; source: string; at: string; people: number }[];
+  /** Your own schools and jobs (LinkedIn Education.csv / Positions.csv), used to place connections. */
+  timeline?: TimelineEntry[];
   /** CRM tracker rows and their matching rules, carried over from local files (see workspaceFromSources). */
   crm?: { networking: Row[]; classmates: Row[]; encounters: Row[]; rules: Sources['rules'] };
   updatedAt: string;
@@ -142,12 +145,16 @@ export function mergeImport(ws: Workspace, r: ImportResult, opt: MergeOptions): 
 
   const byId = new Map(ws.people.map((p) => [p.id, p]));
   const meSlug = slug(ws.me.name);
+  const chapter = placeByTimeline(r.kind === 'linkedin' ? ws.timeline ?? [] : []);
   let added = 0, updated = 0;
   for (const p of r.people) {
     const id = slug(p.name);
     if (!id || id === meSlug) continue;
     const ctx = p.groups.map((g) => groupCtx.get(g)).filter((x): x is string => !!x);
-    if (opt.companyContexts && p.org && (orgCount.get(slug(p.org)) ?? 0) >= 2) ctx.push(ensureContext(ws, p.org, world));
+    // Someone from one of your own schools or jobs goes in that world, not the catch-all.
+    const own = chapter(p.org, p.role, p.connectedOn);
+    if (own) ctx.push(ensureContext(ws, own, 'me'));
+    else if (opt.companyContexts && p.org && (orgCount.get(slug(p.org)) ?? 0) >= 2) ctx.push(ensureContext(ws, p.org, world));
     if (!ctx.length) ctx.push(world);
     const ring = ringFor(r.kind, p.status);
     const prev = byId.get(id);
@@ -175,6 +182,25 @@ export function mergeImport(ws: Workspace, r: ImportResult, opt: MergeOptions): 
   }
   ws.imports.push({ id: importId, kind: r.kind, source: r.source, at: new Date().toISOString(), people: r.people.length });
   return { added, updated, importId };
+}
+
+/**
+ * Where a LinkedIn connection belongs in your own timeline, by evidence:
+ * their company is one of your schools or employers, or you connected during a past
+ * school period while not also in a job. Returns the organisation (a world name), or null.
+ */
+export function placeByTimeline(timeline: TimelineEntry[]) {
+  const today = new Date().toISOString().slice(0, 10);
+  const jobs = timeline.filter((t) => t.kind === 'job');
+  const pastSchools = timeline.filter((t) => t.kind === 'school' && t.end && t.end < today);
+  const canonical = (org: string) => timeline.find((t) => sameOrg(t.org, org))?.org ?? org;
+  return (org?: string, role?: string, connectedOn?: string): string | null => {
+    const mine = timeline.find((t) => (org && sameOrg(org, t.org)) || (role && role.toLowerCase().includes(t.org.toLowerCase())));
+    if (mine) return canonical(mine.org);
+    if (!connectedOn || jobs.some((t) => t.start <= connectedOn && connectedOn <= (t.end ?? '9999'))) return null;
+    const at = [...new Set(pastSchools.filter((t) => t.start <= connectedOn && connectedOn <= t.end!).map((t) => canonical(t.org)))];
+    return at.length === 1 ? at[0] : null;
+  };
 }
 
 /** Undo one import: drop it from everyone, and drop people nothing else vouches for. */

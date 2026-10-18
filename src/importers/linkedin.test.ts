@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { isLinkedInCsv, parseLinkedInConnections } from './linkedin';
+import { isLinkedInCsv, parseLinkedInConnections, parseProfile, profileKind, sameOrg } from './linkedin';
+import { placeByTimeline } from '../workspace';
 
 const PREAMBLE = [
   'Notes:',
@@ -54,5 +55,44 @@ describe('parseLinkedInConnections', () => {
   it('detects LinkedIn files', () => {
     expect(isLinkedInCsv(text)).toBe(true);
     expect(isLinkedInCsv('Name,Company\nA,B')).toBe(false);
+  });
+});
+
+describe('LinkedIn profile timeline', () => {
+  const education = [
+    'School Name,Start Date,End Date,Notes,Degree Name,Activities',
+    'State University,2015,2019,,BS,"Rowing, debate"',
+    'Business School,2026,2028,,MBA,',
+  ].join('\n');
+  const positions = [
+    'Company Name,Title,Description,Location,Started On,Finished On',
+    'Acme Corp,Analyst,"Secret project notes",NYC,Jul 2019,Jun 2026',
+  ].join('\n');
+
+  it('reads schools and jobs with academic-year dates, and nothing else', () => {
+    expect(profileKind(education)).toBe('education');
+    expect(profileKind(positions)).toBe('positions');
+    expect(parseProfile(education)).toEqual([
+      { org: 'State University', kind: 'school', start: '2015-08-01', end: '2019-06-30' },
+      { org: 'Business School', kind: 'school', start: '2026-08-01', end: '2028-06-30' },
+    ]);
+    const jobs = parseProfile(positions);
+    expect(jobs).toEqual([{ org: 'Acme Corp', kind: 'job', start: '2019-07-01', end: '2026-06-28' }]);
+    expect(JSON.stringify(jobs)).not.toContain('Secret');
+  });
+
+  it('matches organisation names loosely', () => {
+    expect(sameOrg('Amazon Web Services (AWS)', 'Amazon')).toBe(true);
+    expect(sameOrg('Acme, Inc.', 'Acme Corp')).toBe(true);
+    expect(sameOrg('Amazonia Ltd', 'Amazon')).toBe(false);
+  });
+
+  it('places connections by your own schools, jobs and when you connected', () => {
+    const place = placeByTimeline([...parseProfile(education), ...parseProfile(positions)]);
+    expect(place('Acme', 'Manager')).toBe('Acme Corp'); // a colleague
+    expect(place('Globex', 'Engineer', '2017-03-02')).toBe('State University'); // connected at college
+    expect(place('Globex', 'Engineer', '2021-03-02')).toBeNull(); // during a job: no guess
+    expect(place('Globex', 'Engineer', '2026-09-02')).toBeNull(); // current school: could be anyone
+    expect(place('Initech', 'MBA Candidate, Business School')).toBe('Business School');
   });
 });
