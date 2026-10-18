@@ -17,3 +17,4 @@ data/linkedin-review.md
 .vercel
 data/sort-config.json
 *.local.md
+.env*

@@ -5,3 +5,4 @@
 /node_modules
 /.claude
 /scripts/import_*.py
+/.env*
