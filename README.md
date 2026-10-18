@@ -22,7 +22,7 @@ Open the **Data** screen and drop in any of these (or a .zip of them):
 | WhatsApp | an exported chat `.txt` (who spoke and when; message text is never kept) |
 | Facebook / Instagram | `friends.json`, `followers_1.json`, `following.json` from the data download |
 
-Groups, labels and shared companies become contexts. Tags in contact names ("MAJ Alex Rivera 140", "Lena Brightwater GSB'28") can be mapped to contexts, and the **Sort** view places everyone else one keystroke at a time.
+Groups, labels and shared companies become contexts. Tags in contact names ("Alex Rivera MBA'28", "Lena Brightwater (Run club)") can be mapped to contexts, and the **Sort** view places everyone else one keystroke at a time.
 
 ## Privacy
 

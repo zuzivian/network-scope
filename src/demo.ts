@@ -16,8 +16,8 @@ export function demoSources(): Sources {
       whereMet: [
         { match: 'section b', context: 'section-b' },
         { match: 'study group', context: 'study-group-4' },
-        { match: 'veterans', context: 'veterans-club' },
-        { match: 'aerospace', context: 'aerospace-defense-club' },
+        { match: 'consulting club', context: 'consulting-club' },
+        { match: 'tech club', context: 'tech-club' },
         { match: 'orientation', context: 'orientation' },
         { match: 'classmate', context: 'mba' },
       ],
