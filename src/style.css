@@ -470,3 +470,17 @@ body[data-view='data'] .tip, body[data-view='sort'] .tip { display: none; }
   .tip { left: 10px; right: 10px; max-width: none; }
 }
 body[data-mode='demo'][data-view='data'] #sample-badge { display: none; }
+.brand h1, .badge, .cta { white-space: nowrap; }
+@media (max-width: 900px) {
+  .brand { width: 100%; }
+  .cta { margin-left: auto; }
+  /* The world chips scroll sideways; fade the edge so it's clear there are more. */
+  .filters { mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); padding-right: 24px; }
+}
+@media (max-width: 480px) {
+  body[data-mode='demo'] #sample-badge { display: none; }
+  .tip.welcome { padding: 14px 16px; }
+  .tip.welcome h2 { font-size: 18px; }
+  .tip.welcome p { font-size: 13.5px; }
+  .tip.welcome .tip-actions button { height: 32px; padding: 0 12px; font-size: 13px; }
+}
