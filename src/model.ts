@@ -154,7 +154,7 @@ interface Tracked {
   thankYouOwed: boolean;
   halfLife: number;
   quietAfter: number | null;
-  /** Free text that may name a context ("Tahoe cabin, Sept 2026", "GSB'27"). */
+  /** Free text that may name a context ("Ski trip, Sept 2026", "MBA'27"). */
   hints: string[];
   company?: string;
   mentions: string[];
@@ -213,7 +213,7 @@ function fromClassmateNetwork(rows: Row[]): Tracked[] {
       id: slug(name), name, status,
       ring: CLASSMATE_RING[s] ?? 3,
       met: s !== 'not yet met',
-      role: 'GSB MBA 2028',
+      role: str(r['Program']) ?? 'Classmate',
       lastContact: [date(r['Last Met']), date(r['Last Touchpoint'])].filter(Boolean).sort().pop(),
       followUp: date(r['Follow-up Date']),
       nextAction: followUp,
@@ -368,15 +368,16 @@ export function buildNetwork(src: Sources): Network {
     return n;
   };
   const rules = src.rules.whereMet.map((r) => ({ re: new RegExp(r.match, 'i'), context: r.context }));
+  // The context a plain "classmate" maps to (the whole programme) is only a fallback.
+  const broad = new Set(rules.filter((r) => r.re.test('classmate')).map((r) => r.context));
   const contextsFor = (hints: string[]): string[] => {
     const out: string[] = [];
     for (const h of hints) {
-      const specific = rules.filter((r) => r.context !== 'gsb' && r.re.test(h)).map((r) => r.context);
+      const specific = rules.filter((r) => !broad.has(r.context) && r.re.test(h)).map((r) => r.context);
       out.push(...(specific.length ? specific : rules.filter((r) => r.re.test(h)).map((r) => r.context)));
     }
     const known = [...new Set(out)].filter((c) => ctxById.has(c));
-    // "gsb" is only a fallback when nothing more specific matched.
-    return known.length > 1 ? known.filter((c) => c !== 'gsb') : known;
+    return known.length > 1 && known.some((c) => !broad.has(c)) ? known.filter((c) => !broad.has(c)) : known;
   };
   // A company gets its own box only when two or more people share it, or it already exists.
   const companyCount = new Map<string, number>();

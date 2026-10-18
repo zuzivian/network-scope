@@ -19,6 +19,8 @@ export interface DataViewEnv {
   /** Called after anything that changes the graph, so the app can rebuild before showing it. */
   markDirty: () => void;
   reload: (view?: string) => void;
+  /** Switch view in place (no reload). */
+  show: (view: string) => void;
 }
 
 interface Pending {
@@ -48,10 +50,40 @@ const GUIDES: { title: string; steps: string }[] = [
   { title: 'Notion, Airtable or any spreadsheet', steps: 'Export the table as CSV. You choose which column is the name, company, groups and last-contact date. Columns you don’t map are ignored.' },
 ];
 
+/** The three quickest starts, shown as tiles on the first-run screen. Everything else sits under "More sources". */
+const SOURCES: { id: string; title: string; time: string; blurb: string; steps: string[] }[] = [
+  {
+    id: 'contacts', title: 'Phone contacts', time: 'About 1 minute', blurb: 'iPhone, Mac, Android or Google',
+    steps: [
+      'iPhone or Mac: go to icloud.com/contacts (or open Contacts on a Mac), select all, then <b>Export vCard</b>.',
+      'Android or Google: go to contacts.google.com, then <b>Export → vCard</b>.',
+      'Drop the .vcf file below. Groups and labels become circles; phone numbers and emails are dropped.',
+    ],
+  },
+  {
+    id: 'linkedin', title: 'LinkedIn', time: 'About 10 minutes', blurb: 'Companies become clusters',
+    steps: [
+      'On LinkedIn: <b>Me → Settings &amp; Privacy → Data privacy → Get a copy of your data</b>.',
+      'Tick <b>Connections</b> only, then Request archive. LinkedIn emails a link, usually within 10 minutes.',
+      'Drop the zip or Connections.csv below. Email addresses are dropped.',
+    ],
+  },
+  {
+    id: 'sheet', title: 'A spreadsheet', time: 'About 1 minute', blurb: 'Notion, Airtable, Excel, Outlook',
+    steps: [
+      'Export your table or contact list as CSV.',
+      'Drop it below, then pick which columns hold the name, company and groups.',
+      'Columns you don’t pick are ignored and never stored.',
+    ],
+  },
+];
+const MORE = ['WhatsApp chats', 'Facebook friends', 'Instagram'];
+
 export function mountDataView(host: HTMLElement, env: DataViewEnv) {
   const ws = env.ws;
   const pending: Pending[] = [];
   let flash = '';
+  let source: string | null = null;
 
   const worlds = () => ws.contexts.filter((c) => c.parent === 'me');
   const ctxPath = (id: string) => {
@@ -124,37 +156,55 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
   function render() {
     const empty = env.mode === 'browser' && ws.people.length === 0;
     const local = env.mode === 'local';
+    if (empty) {
+      host.innerHTML = `<div class="data onboarding">${firstRun()}</div>`;
+      return;
+    }
     host.innerHTML = `<div class="data">
       ${flash ? `<p class="flash" role="status">${esc(flash)}${ws.people.length ? ' <button class="link-btn" data-see-map>See your map →</button>' : ''}</p>` : ''}
-      ${empty ? hero() : ''}
-      ${privacy()}
       ${env.hasLocalData ? sourceSwitch() : ''}
-      ${local ? `<section class="dv-block"><h2>Import</h2><p class="fine">You're viewing your local files, which the Python importer maintains. To try the in-browser importers, switch the source to Browser workspace above; your local files stay as they are.</p></section>` : `<section class="dv-block" id="import"><h2>Import</h2>
-        <label class="drop" data-drop>
-          <input type="file" id="files" multiple accept=".csv,.vcf,.txt,.json,.zip" hidden />
-          <b>Drop files here</b> or <span class="linkish">choose files</span>
-          <small>LinkedIn, Contacts (vCard), Google/Outlook/Notion CSV, WhatsApp chat exports, Facebook, Instagram, or a .zip of them</small>
-        </label>
-        ${pending.map(pendingCard).join('')}
-        <details class="guides"><summary>How to export from each site</summary>
-          ${GUIDES.map((g) => `<div class="guide"><b>${esc(g.title)}</b><p>${esc(g.steps)}</p></div>`).join('')}
-        </details>
+      ${local ? `<section class="dv-block"><h2>Import</h2><p class="fine">You're viewing your local files, which the Python importer maintains. To try the in-browser importers, switch the source to Browser workspace above; your local files stay as they are.</p></section>` : `<section class="dv-block" id="import"><h2>Add a source</h2>
+        ${sourcePicker()}
       </section>`}
-      ${empty || local || !ws.people.length ? '' : yourData() + tags() + contexts()}
+      ${local || !ws.people.length ? '' : yourData() + tags() + contexts()}
+      ${privacy()}
       ${storage()}
     </div>`;
   }
 
-  function hero() {
-    return `<section class="hero">
-      <h1>Map your network, privately.</h1>
-      <p>Drop in exports from LinkedIn, your phone's contacts, WhatsApp and more. Network Scope groups people into the worlds you move in (school, work, teams, communities) and shows who bridges them.</p>
-      <div class="hero-actions">
-        <label class="you">Your name <input id="me-name" value="${esc(ws.me.name === 'Me' ? '' : ws.me.name)}" placeholder="So your own name is left out of imports" /></label>
-        <button class="primary" data-pick>Import files</button>
-        <button data-demo>Try sample data</button>
+  /** Source tiles, the chosen source's steps, the drop zone and any files waiting to be added. */
+  function sourcePicker() {
+    const pick = SOURCES.find((x) => x.id === source);
+    return `<div class="sources" role="group" aria-label="Choose a source">
+        ${SOURCES.map((x) => `<button class="source" data-src-tile="${x.id}" aria-pressed="${x.id === source}">
+          <b>${esc(x.title)}</b><span>${esc(x.blurb)}</span><small>${esc(x.time)}</small></button>`).join('')}
       </div>
-    </section>`;
+      ${pick ? `<ol class="steps">${pick.steps.map((t) => `<li>${t}</li>`).join('')}</ol>` : ''}
+      ${dropZone()}
+      ${pending.map(pendingCard).join('')}
+      <details class="guides"><summary>More sources: WhatsApp, Facebook, Instagram</summary>
+        ${GUIDES.filter((g) => MORE.includes(g.title)).map((g) => `<div class="guide"><b>${esc(g.title)}</b><p>${esc(g.steps)}</p></div>`).join('')}
+      </details>`;
+  }
+
+  /** First run: one decision (which source), one drop zone, privacy in a sentence. Everything else comes later. */
+  function firstRun() {
+    return `<section class="hero">
+        <h1>Make your map</h1>
+        <p>Start with one source. You’ll see your network in about a minute, and the file never leaves this browser.</p>
+      </section>
+      ${sourcePicker()}
+      <p class="lock"><b>Private by design.</b> Files are read here in your browser and saved only in this browser. Nothing is uploaded: no account, no server, no tracking. Phone numbers, emails and message text are dropped as files are read.</p>
+      <p class="fine aside"><button class="linkish" data-sample>Back to the sample</button> ·
+        <label class="linkish">Restore a backup<input type="file" id="restore" accept=".json" hidden /></label></p>`;
+  }
+
+  function dropZone() {
+    return `<label class="drop" data-drop>
+        <input type="file" id="files" multiple accept=".csv,.vcf,.txt,.json,.zip" hidden />
+        <b>Drop a file here</b> or <span class="linkish">choose one</span>
+        <small>.vcf, .csv, .zip, WhatsApp .txt or Facebook/Instagram .json</small>
+      </label>`;
   }
 
   function privacy() {
@@ -205,12 +255,13 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
       ${r.dropped.length ? `<p class="fine">Not kept: ${esc(r.dropped.join(', '))}</p>` : ''}
       ${r.warnings.map((w) => `<p class="fine warn">${esc(w)}</p>`).join('')}
       <p class="fine">e.g. ${esc(r.people.slice(0, 6).map((x) => x.name).join(', '))}${r.people.length > 6 ? '…' : ''}</p>
-      <div class="opts">${worldPicker(p)}
-        ${r.groups.length ? `<label><input type="checkbox" data-opt="groupContexts" data-id="${p.id}" ${p.groupContexts ? 'checked' : ''}/> A context per group</label>` : ''}
-        ${shared ? `<label><input type="checkbox" data-opt="companyContexts" data-id="${p.id}" ${p.companyContexts ? 'checked' : ''}/> A context per shared company</label>` : ''}
-      </div>
-      <div class="row"><button class="primary" data-commit="${p.id}" ${r.people.length ? '' : 'disabled'}>Import ${r.people.length} people</button>
+      <div class="row"><button class="primary" data-commit="${p.id}" ${r.people.length ? '' : 'disabled'}>Add ${r.people.length} people to my map</button>
         <button data-discard="${p.id}">Discard</button></div>
+      <details class="more-opts"><summary>Options</summary><div class="opts">${worldPicker(p)}
+        ${r.groups.length ? `<label><input type="checkbox" data-opt="groupContexts" data-id="${p.id}" ${p.groupContexts ? 'checked' : ''}/> A circle per group</label>` : ''}
+        ${shared ? `<label><input type="checkbox" data-opt="companyContexts" data-id="${p.id}" ${p.companyContexts ? 'checked' : ''}/> A circle per shared company</label>` : ''}
+        <label class="you">Your name, so you’re left out <input id="me-name" value="${esc(ws.me.name === 'Me' ? '' : ws.me.name)}" placeholder="e.g. Jordan Lee" /></label>
+      </div></details>
     </article>`;
   }
 
@@ -344,8 +395,8 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
   host.addEventListener('click', async (e) => {
     const t = e.target as HTMLElement;
     const b = (sel: string) => t.closest<HTMLElement>(sel);
-    if (b('[data-pick]')) return host.querySelector<HTMLInputElement>('#files')?.click();
-    if (b('[data-demo]')) return env.reload('graph&demo');
+    if (b('[data-sample]')) return env.show('graph');
+    if (b('[data-src-tile]')) { const id = b('[data-src-tile]')!.dataset.srcTile!; source = source === id ? null : id; return render(); }
     if (b('[data-see-map]')) return env.reload('graph');
     if (b('[data-source]')) {
       const v = b('[data-source]')!.dataset.source!;
@@ -371,8 +422,15 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
     }
     if (b('[data-commit]')) {
       const p = find(b('[data-commit]')!.dataset.commit)!;
+      const first = ws.people.length === 0;
       const r = mergeImport(ws, p.result!, { world: p.world, groupContexts: p.groupContexts, companyContexts: p.companyContexts });
       p.done = `${r.added} added, ${r.updated} matched people you already had.`;
+      if (first && !pending.some((x) => x.result && !x.done)) {
+        // First import: straight to the map. That's the payoff.
+        pruneContexts(ws);
+        await saveWorkspace(ws);
+        return env.reload('graph');
+      }
       return commit(`Imported ${p.result!.source}: ${p.done}`);
     }
     if (b('[data-remove-import]')) {

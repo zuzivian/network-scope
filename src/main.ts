@@ -9,7 +9,8 @@ import { renderPanel } from './panel';
 import { mountScope, type Scope } from './scope';
 import { mountSort, type SortView } from './sort';
 import { createStore, type View } from './state';
-import { loadWorkspace, toSources, workspaceContacts } from './workspace';
+import { mountTips } from './tips';
+import { exportWorkspace, loadWorkspace, toSources, workspaceContacts } from './workspace';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
@@ -25,17 +26,18 @@ function reload(view = 'graph') {
 }
 
 async function boot() {
-  // Which network to show: the demo, Nat's local files (dev only), or this browser's workspace.
+  // Which network to show: local files (dev only), this browser's workspace, or the sample.
+  // A first visit (empty workspace) opens on the sample map, so there's something to see at once.
   let pref: string | null = null;
   try { pref = localStorage.getItem('ns-source'); } catch { /* storage blocked */ }
   const ws = await loadWorkspace();
-  const mode: Mode = params.has('demo') ? 'demo' : hasLocalData && pref !== 'browser' ? 'local' : 'browser';
+  const wsEmpty = ws.people.length === 0;
+  const mode: Mode = hasLocalData && pref !== 'browser' ? 'local' : params.has('demo') || wsEmpty ? 'demo' : 'browser';
   const sources: Sources = mode === 'demo' ? demoSources() : mode === 'local' ? localSources()! : toSources(ws);
-  const empty = mode === 'browser' && ws.people.length === 0;
 
   const net = buildNetwork(sources);
   const qView = params.get('view') as View | null;
-  const initialView: View = empty ? 'data' : qView && VIEWS.includes(qView) ? qView : 'graph';
+  const initialView: View = qView && VIEWS.includes(qView) && !(mode === 'demo' && qView === 'sort') ? qView : 'graph';
   const store = createStore({ selected: null, hidden: new Set<string>(), query: '', attentionOnly: false, view: initialView });
   const select = (id: string | null) => store.set({ selected: id });
   const panel = $('panel');
@@ -46,15 +48,13 @@ async function boot() {
   badge.textContent = mode === 'demo' ? 'Sample data' : mode === 'local' ? 'Local files' : 'Private · this browser';
   badge.className = `badge ${mode}`;
   document.body.dataset.mode = mode;
-  document.body.classList.toggle('empty', empty);
 
-  // Graph-dependent views only exist once there's a network to draw.
-  const graph: GraphView | null = empty ? null : mountGraph($('graph'), net, select);
+  const graph: GraphView = mountGraph($('graph'), net, select);
   let scope: Scope | null = null;
   let sort: SortView | null = null;
   const sortContacts = mode === 'local' ? localContacts : mode === 'browser' ? workspaceContacts(ws) : [];
   const ensureSort = () => {
-    if (sort || empty || mode === 'demo') return sort;
+    if (sort || mode === 'demo') return sort;
     sort = mode === 'local'
       ? mountSort($('sort'), () => panel, net, sortContacts, localSortStore())
       : mountSort($('sort'), () => panel, net, sortContacts, browserStore(ws, () => reload('graph')));
@@ -62,15 +62,34 @@ async function boot() {
   };
 
   let dirty = false;
+  // The Data screen always manages the browser workspace (or the local files), even while the sample is showing.
   mountDataView($('data'), {
-    mode, ws, hasLocalData,
+    mode: mode === 'local' ? 'local' : 'browser', ws, hasLocalData,
     localGraph: () => localSources()?.graph.data ?? null,
-    markDirty: () => {
-      dirty = true;
-      // First import into an empty workspace: the other views open now (each click reloads with the new data).
-      if (empty) document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => { b.disabled = false; });
-    },
+    markDirty: () => { dirty = true; },
     reload,
+    show: (v) => store.set({ view: v as View }),
+  });
+
+  // Sample mode: one clear way out, to your own map.
+  const cta = $<HTMLButtonElement>('cta');
+  cta.hidden = mode !== 'demo';
+  cta.textContent = wsEmpty ? 'Make my map' : 'Back to my map';
+  cta.addEventListener('click', () => (wsEmpty ? store.set({ view: 'data' }) : reload('graph')));
+
+  const tips = mountTips($('tip'), {
+    mode, net, ws,
+    act(a) {
+      if (a === 'attention') return store.set({ attentionOnly: true });
+      if (a === 'backup') {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(exportWorkspace(ws));
+        link.download = `network-scope-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        return setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      }
+      store.set({ view: a });
+    },
   });
 
   // World filters
@@ -93,12 +112,11 @@ async function boot() {
       const v = b.dataset.view as View;
       // Data changed in this session: rebuild the network before showing it.
       if (dirty && v !== 'data') return reload(v);
-      if (empty && v !== 'data') return;
       store.set({ view: v });
     }));
   $<HTMLInputElement>('search').addEventListener('input', (e) => store.set({ query: (e.target as HTMLInputElement).value }));
   $('attention').addEventListener('click', () => store.set({ attentionOnly: !store.get().attentionOnly }));
-  $('reset').addEventListener('click', () => (store.get().view === 'graph' ? graph?.resetView() : scope?.resetView()));
+  $('reset').addEventListener('click', () => (store.get().view === 'graph' ? graph.resetView() : scope?.resetView()));
 
   panel.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>('[data-select]');
@@ -123,28 +141,21 @@ async function boot() {
     history.replaceState(null, '', url);
     document.body.dataset.view = v;
     motionBtn.hidden = v !== 'scope';
-    if (v === 'scope' && !scope && !empty) { scope = mountScope($('scope'), net, select); scope.setMotion(motion); }
+    if (v === 'scope' && !scope) { scope = mountScope($('scope'), net, select); scope.setMotion(motion); }
     scope?.setMotion(v === 'scope' && motion);
-    graph?.update(s);
+    graph.update(s);
     scope?.update(s);
     const sv = v === 'sort' ? ensureSort() : sort;
-    if (v === 'sort' && sv) sv.show(); else { sort?.hide(); if (!empty) renderPanel(panel, net, s); }
+    if (v === 'sort' && sv) sv.show(); else { sort?.hide(); renderPanel(panel, net, s); }
+    tips.update(s);
     chips.querySelectorAll<HTMLButtonElement>('[data-world]').forEach((b) => b.setAttribute('aria-pressed', String(!s.hidden.has(b.dataset.world!))));
     document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {
       b.setAttribute('aria-pressed', String(b.dataset.view === v));
-      b.disabled = empty && b.dataset.view !== 'data' || (mode === 'demo' && b.dataset.view === 'sort');
+      b.disabled = mode === 'demo' && b.dataset.view === 'sort';
+      if (b.disabled) b.title = 'Sort works on your own map';
     });
     $('attention').setAttribute('aria-pressed', String(s.attentionOnly));
   });
 }
-
-// Theme: follows the system until toggled; the choice is remembered per browser.
-const root = document.documentElement;
-try { const t = localStorage.getItem('theme'); if (t) root.dataset.theme = t; } catch { /* ignore */ }
-$('theme').addEventListener('click', () => {
-  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-  root.dataset.theme = dark ? 'light' : 'dark';
-  try { localStorage.setItem('theme', root.dataset.theme); } catch { /* ignore */ }
-});
 
 boot();
