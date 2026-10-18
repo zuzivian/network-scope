@@ -23,7 +23,7 @@ export function renderPanel(el: HTMLElement, net: Network, s: State) {
     `<span class="dot ring-${n.ring}${n.met ? '' : ' never'}${n.warmth == null && n.met ? ' undated' : ''}" style="--w:${n.warmth ?? 0.4}"></span>`;
   const row = (n: Node, meta: string) => `<li><button class="person-row" data-select="${n.id}">
     ${dot(n)}<span class="who"><b>${esc(n.name)}</b><small>${esc(n.org ?? n.role ?? worldName(n.world))}</small></span>
-    <span class="meta">${esc(meta)}</span></button></li>`;
+    <span class="meta${meta.length > 16 ? ' wide' : ''}">${esc(meta)}</span></button></li>`;
   const ctxRow = (c: Context, meta: string) => `<li><button class="person-row" data-select="${c.id}">
     <span class="diamond${c.depth === 1 ? ' world' : ''}"></span><span class="who"><b>${esc(c.name)}</b>
     <small>${esc(c.years ?? c.role ?? '')}</small></span><span class="meta">${esc(meta)}</span></button></li>`;

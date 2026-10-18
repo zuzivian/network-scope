@@ -3,8 +3,9 @@ import {
   forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY,
   type Simulation, type SimulationLinkDatum, type SimulationNodeDatum,
 } from 'd3-force';
+import { interpolateZoom } from 'd3-interpolate';
 import { select } from 'd3-selection';
-import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom';
+import { zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3-zoom';
 import { isSocial, type Context, type LinkKind, type Network, type Node as Person } from './model';
 import type { State } from './state';
 
@@ -63,11 +64,23 @@ function orderWorlds(net: Network): Context[] {
 }
 
 export function mountGraph(host: HTMLElement, net: Network, onSelect: (id: string | null) => void): GraphView {
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const svg = select(host).append('svg').attr('class', 'graph').attr('role', 'img')
     .attr('aria-label', `Network graph: ${net.people.length} people in ${net.contexts.length} contexts`);
+  // A dot grid behind the network moves at a slower rate than it (parallax), so panning and
+  // flying between nodes reads as travelling over a surface rather than sliding a flat picture.
+  const defs = svg.append('defs');
+  const grid = defs.append('pattern').attr('id', 'ground').attr('patternUnits', 'userSpaceOnUse').attr('width', 28).attr('height', 28);
+  grid.append('circle').attr('cx', 1).attr('cy', 1).attr('r', 0.9).attr('class', 'ground-dot');
+  const ground = svg.append('rect').attr('class', 'ground').attr('fill', 'url(#ground)');
   const view = svg.append('g').attr('class', 'view');
   const linkLayer = view.append('g').attr('class', 'links');
+  const trailLayer = view.append('g').attr('class', 'trail-layer');
+  const trailPath = trailLayer.append('path').attr('class', 'trail-path');
+  let trail: string[] = [];
+  const pulseLayer = view.append('g').attr('class', 'pulses');
   const nodeLayer = view.append('g').attr('class', 'nodes');
+  const trailNav = select(host).append('nav').attr('class', 'trail').attr('aria-label', 'Your path through the network');
 
   // ----- Build nodes and anchors -----
   const worlds = orderWorlds(net);
@@ -149,6 +162,9 @@ export function mountGraph(host: HTMLElement, net: Network, onSelect: (id: strin
     .on('mouseleave', () => hover(null));
 
   nodeSel.append('circle').attr('class', 'hit').attr('r', (d) => d.r + 6);
+  // People you've been in touch with lately breathe: a slow glow whose strength is their recency.
+  nodeSel.filter((d) => (d.person?.warmth ?? 0) > 0.55).append('circle').attr('class', 'glow').attr('r', (d) => d.r + 5)
+    .style('--warm', (d) => String(d.person!.warmth)).style('animation-delay', () => `${(-Math.random() * 4).toFixed(2)}s`);
   nodeSel.filter((d) => !!d.person?.flags.length).append('circle').attr('class', 'alert').attr('r', (d) => d.r + 3.5);
   nodeSel.filter((d) => d.kind === 'context').append('rect').attr('class', 'shape')
     .attr('x', (d) => -d.r).attr('y', (d) => -d.r).attr('width', (d) => d.r * 2).attr('height', (d) => d.r * 2)
@@ -176,6 +192,7 @@ export function mountGraph(host: HTMLElement, net: Network, onSelect: (id: strin
   function paint() {
     linkSel.attr('x1', (l) => l.source.x!).attr('y1', (l) => l.source.y!).attr('x2', (l) => l.target.x!).attr('y2', (l) => l.target.y!);
     nodeSel.attr('transform', (d) => `translate(${d.x},${d.y})`);
+    paintTrail();
   }
   sim.on('tick', paint);
   paint();
@@ -184,8 +201,10 @@ export function mountGraph(host: HTMLElement, net: Network, onSelect: (id: strin
   const zoomer: ZoomBehavior<SVGSVGElement, unknown> = zoom<SVGSVGElement, unknown>()
     .scaleExtent([0.3, 5])
     .on('zoom', (e) => {
-      view.attr('transform', e.transform.toString());
-      svg.classed('zoomed', e.transform.k > 1.35);
+      const t = e.transform;
+      view.attr('transform', t.toString());
+      svg.classed('zoomed', t.k > 1.35);
+      grid.attr('patternTransform', `translate(${t.x * 0.45},${t.y * 0.45}) scale(${Math.sqrt(t.k)})`);
     });
   svg.call(zoomer).on('dblclick.zoom', null);
   svg.on('click', (e: MouseEvent) => { if (e.target === svg.node()) onSelect(null); });
@@ -194,18 +213,135 @@ export function mountGraph(host: HTMLElement, net: Network, onSelect: (id: strin
     const { width, height } = host.getBoundingClientRect();
     if (!width || !height) return;
     svg.attr('viewBox', `${-width / 2} ${-height / 2} ${width} ${height}`);
+    ground.attr('x', -width / 2).attr('y', -height / 2).attr('width', width).attr('height', height);
     const xs = nodes.map((n) => n.x!), ys = nodes.map((n) => n.y!);
     const w = Math.max(...xs) - Math.min(...xs) + 120, h = Math.max(...ys) - Math.min(...ys) + 60;
     const k = Math.min(1.4, Math.min(width / w, height / h));
     const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
     svg.call(zoomer.transform, zoomIdentity.scale(k).translate(-cx, -cy));
   }
-  new ResizeObserver(() => fit()).observe(host);
+  // Later resizes (a scrollbar appearing, the window changing) keep the camera where it is.
+  let fitted = false;
+  new ResizeObserver(() => {
+    const { width, height } = host.getBoundingClientRect();
+    if (!width || !height) return;
+    if (!fitted) { fitted = true; return fit(); }
+    svg.attr('viewBox', `${-width / 2} ${-height / 2} ${width} ${height}`);
+    ground.attr('x', -width / 2).attr('y', -height / 2).attr('width', width).attr('height', height);
+  }).observe(host);
   fit();
+  if (host.getBoundingClientRect().width) fitted = true;
+
+  // ----- Camera: fly to whatever you select (zooms out a little, travels, zooms back in) -----
+  let flight = 0;
+  function flyTo(ids: Set<string>, anchorId: string) {
+    const { width, height } = host.getBoundingClientRect();
+    if (!width || !height) return;
+    const pts = [...ids].map((id) => byId.get(id)).filter((n): n is GNode => !!n && n.kind !== 'me');
+    const a = byId.get(anchorId)!;
+    // Frame the node and its neighbourhood, but never so wide that the node itself gets lost.
+    const near = pts.filter((n) => Math.hypot(n.x! - a.x!, n.y! - a.y!) < 420);
+    const xs = near.map((n) => n.x!), ys = near.map((n) => n.y!);
+    const span = Math.max(160, Math.max(...xs) - Math.min(...xs) + 140, (Math.max(...ys) - Math.min(...ys) + 100) * (width / height));
+    const k = Math.max(0.7, Math.min(2.6, width / span));
+    const t0 = zoomTransform(svg.node()!);
+    const from: [number, number, number] = [-t0.x / t0.k, -t0.y / t0.k, width / t0.k];
+    const to: [number, number, number] = [a.x!, a.y!, width / k];
+    const go = (v: [number, number, number]) => { const kk = width / v[2]; svg.call(zoomer.transform, zoomIdentity.translate(-v[0] * kk, -v[1] * kk).scale(kk)); };
+    cancelAnimationFrame(flight);
+    if (reduceMotion || document.hidden) return go(to);
+    const lerp = interpolateZoom(from, to);
+    const ms = Math.min(1400, Math.max(450, lerp.duration * 0.7));
+    const start = performance.now();
+    const step = (now: number) => {
+      const u = Math.min(1, (now - start) / ms);
+      go(lerp(u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2));
+      if (u < 1) flight = requestAnimationFrame(step);
+    };
+    flight = requestAnimationFrame(step);
+  }
+  // Interrupt a flight as soon as you grab the map.
+  svg.on('pointerdown.flight wheel.flight', () => cancelAnimationFrame(flight));
+
+  // ----- Signal pulses: dots travel outward along the focused node's links -----
+  let pulseFrame = 0;
+  let pulseLinks: { from: GNode; to: GNode; offset: number }[] = [];
+  function startPulses(id: string | null) {
+    cancelAnimationFrame(pulseFrame);
+    pulseLayer.selectAll('*').remove();
+    if (!id || reduceMotion) return;
+    const n = byId.get(id)!;
+    pulseLinks = links.filter((l) => l.source.id === id || l.target.id === id)
+      .map((l) => ({ from: n, to: l.source.id === id ? l.target : l.source, offset: Math.random() }))
+      .sort((a, b) => (a.to.kind === 'person' ? 1 : 0) - (b.to.kind === 'person' ? 1 : 0))
+      .slice(0, 48);
+    const dots = pulseLayer.selectAll<SVGCircleElement, unknown>('circle').data(pulseLinks).join('circle').attr('class', 'pulse').attr('r', 2.4);
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      dots.each(function (p) {
+        const f = ((now - t0) / 1600 + p.offset) % 1;
+        const e = 1 - (1 - f) ** 2;
+        this.setAttribute('cx', String(p.from.x! + (p.to.x! - p.from.x!) * e));
+        this.setAttribute('cy', String(p.from.y! + (p.to.y! - p.from.y!) * e));
+        this.style.opacity = String(Math.sin(Math.PI * f));
+      });
+      pulseFrame = requestAnimationFrame(tick);
+    };
+    pulseFrame = requestAnimationFrame(tick);
+  }
+
+  // ----- Trail: where you've been, drawn on the map and listed as breadcrumbs -----
+  function paintTrail() {
+    const pts = trail.map((id) => byId.get(id)).filter((n): n is GNode => !!n);
+    trailPath.attr('d', pts.length > 1 ? `M${pts.map((n) => `${n.x},${n.y}`).join('L')}` : null);
+  }
+  function renderTrail() {
+    paintTrail();
+    trailNav.classed('on', trail.length > 0).html(trail.length ? `<span class="trail-label">Path</span>${trail.map((id, i) => {
+      const n = byId.get(id)!;
+      return `${i ? '<span class="trail-sep">›</span>' : ''}<button data-trail="${id}" ${i === trail.length - 1 ? 'aria-current="true"' : ''}>${escapeHtml(n.label)}</button>`;
+    }).join('')}<button class="trail-clear" data-trail-clear title="Clear path">×</button>` : '');
+  }
+  trailNav.on('click', (e: MouseEvent) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('button');
+    if (!b) return;
+    if (b.dataset.trailClear !== undefined) { trail = []; renderTrail(); return onSelect(null); }
+    if (b.dataset.trail) onSelect(b.dataset.trail);
+  });
+
+  // ----- Keyboard traversal: ← → step through the selected node's connections, Enter goes there -----
+  let candidates: string[] = [];
+  let step = -1;
+  function setCandidates(id: string | null) {
+    const n = id ? byId.get(id) : null;
+    candidates = n ? [...(neighbours.get(n.id) ?? [])].map((x) => byId.get(x)!).filter((x) => x.kind !== 'me')
+      .sort((a, b) => Math.atan2(a.y! - n.y!, a.x! - n.x!) - Math.atan2(b.y! - n.y!, b.x! - n.x!)).map((x) => x.id) : [];
+    step = -1;
+    nodeSel.classed('candidate', false);
+  }
+  document.addEventListener('keydown', (e) => {
+    if (host.hidden || !state?.selected || (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]'))) return;
+    if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && candidates.length) {
+      e.preventDefault();
+      step = (step + (e.key === 'ArrowRight' ? 1 : -1) + candidates.length) % candidates.length;
+      const id = candidates[step];
+      nodeSel.classed('candidate', (d) => d.id === id);
+      hover(id);
+    } else if (e.key === 'Enter' && step >= 0) {
+      e.preventDefault();
+      const id = candidates[step];
+      hovered = null;
+      onSelect(id);
+    } else if (e.key === 'Backspace' && trail.length > 1) {
+      e.preventDefault();
+      onSelect(trail[trail.length - 2]);
+    }
+  });
 
   // ----- State -----
   let state: State | null = null;
   let hovered: string | null = null;
+  let lastSelected: string | null = null;
 
   function hover(id: string | null) {
     hovered = id;
@@ -233,6 +369,19 @@ export function mountGraph(host: HTMLElement, net: Network, onSelect: (id: strin
 
   function update(s: State) {
     state = s;
+    if (s.selected !== lastSelected) {
+      lastSelected = s.selected;
+      if (s.selected) {
+        // Going back to a node already on the path rewinds the path to it.
+        const at = trail.indexOf(s.selected);
+        trail = at >= 0 ? trail.slice(0, at + 1) : [...trail, s.selected].slice(-7);
+        if (!host.hidden) flyTo(focusSet(s.selected)!, s.selected);
+      }
+      hovered = null;
+      setCandidates(s.selected);
+      startPulses(s.selected);
+      renderTrail();
+    }
     const focus = focusSet(hovered ?? s.selected);
     const q = s.query.trim().toLowerCase();
     nodeSel.each(function (d) {
@@ -294,6 +443,10 @@ function placeLabels(nodes: GNode[]): Map<string, 'left' | 'right'> {
     }
   }
   return out;
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
 function initials(name: string) {

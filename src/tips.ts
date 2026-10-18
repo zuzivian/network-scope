@@ -33,6 +33,10 @@ const TIPS: Tip[] = [
     body: () => '<b>Click any dot</b> to see who someone is, how you know them, and the warm path to people you haven’t met.',
   },
   {
+    id: 'demo-travel', when: (c) => c.mode === 'demo',
+    body: () => '<b>Keep going.</b> Click any connection to travel there, or press ← → to step through them and Enter to go. Your path builds up in the corner; Backspace goes back.',
+  },
+  {
     id: 'demo-bridges', when: (c) => c.mode === 'demo' && c.bridges > 0,
     body: (c) => `<b>${plural(c.bridges, 'bridge')}</b> connect two of these worlds. They’re listed on the right, and they’re often your best route to an intro.`,
   },
@@ -53,6 +57,10 @@ const TIPS: Tip[] = [
       const groups = c.net.contexts.filter((x) => x.depth > 1).length;
       return `${plural(c.net.people.length, 'person', 'people')}${groups ? ` in ${plural(groups, 'group')}` : ''}. Click a dot to see who someone is, or search above.`;
     },
+  },
+  {
+    id: 'own-travel', when: (c) => c.mode === 'browser',
+    body: () => '<b>Keep going.</b> Click any connection to travel there, or press ← → to step through them and Enter to go. Your path builds up in the corner; Backspace goes back.',
   },
   {
     id: 'own-second', when: (c) => c.mode === 'browser' && c.ws.imports.length === 1,
