@@ -47,7 +47,7 @@ const GUIDES: { title: string; steps: string }[] = [
   { title: 'WhatsApp chats', steps: 'In a chat or group: ⋮ / contact name → Export chat → Without media. Drop the .txt or .zip. Only who spoke and when is kept: message text is never stored, and unsaved phone numbers are skipped.' },
   { title: 'Facebook friends', steps: 'Facebook → Settings → Your information → Download your information → choose “Friends and followers”, format JSON. Drop friends.json or the zip.' },
   { title: 'Instagram', steps: 'Instagram → Accounts Center → Your information and permissions → Download your information → “Followers and following”, format JSON. Followers count as weak ties until you place them.' },
-  { title: 'Notion, Airtable or any spreadsheet', steps: 'Export the table as CSV. You choose which column is the name, company, groups and last-contact date. Columns you don’t map are ignored.' },
+  { title: 'Notion, Airtable or any spreadsheet', steps: 'Export the table as CSV. You choose which column is the name, company and groups. Columns you don’t map are ignored.' },
 ];
 
 /** The four main sources, best start first, with steps for a computer and for a phone. Others sit under "More sources". */
@@ -290,17 +290,17 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
     const shared = [...orgs.values()].filter((n) => n >= 2).length;
     return `<article class="pending">
       <header><b>${esc(r.source)}</b><small>${esc(p.file)}</small></header>
-      <p class="counts">${r.people.length} people${r.groups.length ? ` · ${r.groups.length} groups` : ''}${shared ? ` · ${shared} shared companies` : ''}</p>
+      <p class="counts">${r.people.length} ${r.people.length === 1 ? 'person' : 'people'}${r.groups.length ? ` · ${r.groups.length} groups` : ''}${shared ? ` · ${shared} shared companies` : ''}</p>
       ${r.kind === 'linkedin' ? timelineNote() : ''}
       ${r.dropped.length ? `<p class="fine">Not kept: ${esc(r.dropped.join(', '))}</p>` : ''}
       ${r.warnings.map((w) => `<p class="fine warn">${esc(w)}</p>`).join('')}
       <p class="fine">e.g. ${esc(r.people.slice(0, 6).map((x) => x.name).join(', '))}${r.people.length > 6 ? '…' : ''}</p>
-      <div class="row"><button class="primary" data-commit="${p.id}" ${r.people.length ? '' : 'disabled'}>Add ${r.people.length} people to my map</button>
+      <div class="row"><button class="primary" data-commit="${p.id}" ${r.people.length ? '' : 'disabled'}>Add ${r.people.length} ${r.people.length === 1 ? 'person' : 'people'} to my map</button>
         <button data-discard="${p.id}">Discard</button></div>
       <details class="more-opts"><summary>Options</summary><div class="opts">${worldPicker(p)}
         ${r.groups.length ? `<label><input type="checkbox" data-opt="groupContexts" data-id="${p.id}" ${p.groupContexts ? 'checked' : ''}/> A circle per group</label>` : ''}
         ${shared ? `<label><input type="checkbox" data-opt="companyContexts" data-id="${p.id}" ${p.companyContexts ? 'checked' : ''}/> A circle per shared company</label>` : ''}
-        <label class="you">Your name, so you’re left out <input id="me-name" value="${esc(ws.me.name === 'Me' ? '' : ws.me.name)}" placeholder="e.g. Jordan Lee" /></label>
+        <label class="you">Your name, so you’re left out <input id="me-name" value="${esc(ws.me.name === 'Me' || ws.me.name === 'You' ? '' : ws.me.name)}" placeholder="e.g. Jordan Lee" /></label>
       </div></details>
     </article>`;
   }
@@ -379,7 +379,7 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
       const hasKids = ws.contexts.some((x) => x.parent === c.id);
       return `<li><div class="ctx-row">
           <input data-rename="${c.id}" value="${esc(c.name)}" aria-label="Name" />
-          <small>${n} people</small>
+          <small>${n} ${n === 1 ? 'person' : 'people'}</small>
           <button data-add-child="${c.id}" title="Add a context inside">+ inside</button>
           ${!n && !hasKids ? `<button data-delete="${c.id}" title="Delete">Delete</button>` : ''}
         </div>${hasKids ? `<ul>${kids(c.id)}</ul>` : ''}</li>`;
@@ -430,7 +430,7 @@ export function mountDataView(host: HTMLElement, env: DataViewEnv) {
         return commit(`Restored ${next.people.length} people from the backup.`);
       } catch (err) { flash = (err as Error).message; return render(); }
     }
-    if (t.id === 'me-name') { ws.me.name = t.value.trim() || 'Me'; return commit('Name saved.'); }
+    if (t.id === 'me-name') { ws.me.name = t.value.trim() || 'You'; return commit('Name saved.'); }
     if (t.dataset.world) {
       const p = find(t.dataset.world)!;
       p.world = t.value === '__new' ? { newName: defaultWorldName(p.result!.kind) } : { id: t.value };

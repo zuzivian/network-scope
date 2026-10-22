@@ -59,7 +59,7 @@ export function layout(net: Network, R: number): { placed: Placed[]; sectors: Se
     const start = cursor;
     const end = cursor + span;
     cursor = end + GAP;
-    sectors.push({ circle: g.circle, start, end, count: g.people.length });
+    sectors.push({ circle: g.circle, start, end, count: net.people.filter((p) => p.worlds.includes(g.circle.id)).length });
 
     // Keep sub-groups (company, where met) adjacent; closer rings first within a group.
     const sorted = [...g.people].sort(

@@ -52,7 +52,7 @@ export interface Workspace {
 
 type Row = Record<string, unknown>;
 
-export function emptyWorkspace(name = 'Me'): Workspace {
+export function emptyWorkspace(name = 'You'): Workspace {
   return { version: 1, me: { id: 'me', name }, contexts: [], people: [], links: [], tagRules: {}, decisions: {}, imports: [], updatedAt: new Date().toISOString() };
 }
 

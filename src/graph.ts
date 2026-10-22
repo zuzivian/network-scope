@@ -105,7 +105,7 @@ export function mountGraph(host: HTMLElement, net: Network, onSelect: (id: strin
   };
 
   const nodes: GNode[] = [];
-  nodes.push({ id: net.me.id, kind: 'me', label: initials(net.me.name), r: 17, worlds: [], ax: 0, ay: 0, fx: 0, fy: 0 });
+  nodes.push({ id: net.me.id, kind: 'me', label: initials(net.me.name === 'Me' ? 'You' : net.me.name), r: 17, worlds: [], ax: 0, ay: 0, fx: 0, fy: 0 });
   for (const c of net.contexts) {
     const a = anchor.get(c.world) ?? { x: 0, y: 0 };
     const isWorld = c.depth === 1;

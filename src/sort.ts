@@ -179,7 +179,7 @@ export function mountSort(host: HTMLElement, panel: () => HTMLElement, net: Netw
     host.innerHTML = `
       <div class="sort">
         <nav class="queues" role="tablist">${counts.map((q) => `<button role="tab" aria-selected="${q.id === queue}" data-queue="${q.id}" title="${esc(q.hint)}">
-          ${q.label}<span>${q.left ? `${q.left} left` : 'done'}</span></button>`).join('')}</nav>
+          ${q.label}<span>${q.left ? `${q.left} left` : q.total ? 'done' : 'none'}</span></button>`).join('')}</nav>
         <div class="progress" title="${done} of ${qc.total} decided"><i style="width:${qc.total ? (done / qc.total) * 100 : 0}%"></i></div>
         <p class="queue-hint">${esc(qc.hint)} · ${done} of ${qc.total} decided
           <button class="mode" data-batch aria-pressed="${batch}"><kbd>B</kbd> ${batch ? 'One at a time' : 'Batch mode'}</button></p>

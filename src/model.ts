@@ -206,8 +206,8 @@ export function localToday(): string {
 export interface Sources {
   graph: { data: GraphFile; sample: boolean; label?: string };
   imports: { name: string; rows: number }[];
-  networking: { rows: Row[]; sample: boolean };
-  classmates: { rows: Row[]; sample: boolean };
+  networking: { rows: Row[]; sample: boolean; label?: string };
+  classmates: { rows: Row[]; sample: boolean; label?: string };
   encounters: Row[];
   rules: { aliases: Record<string, string>; whereMet: { match: string; context: string }[] };
 }
@@ -258,11 +258,12 @@ export function buildNetwork(src: Sources): Network {
 
   // Tracker rows. Fictional fixtures never mix into a real graph.
   const useTracker = (t: { sample: boolean }) => !t.sample || src.graph.sample;
+  const trackerLabel = (s: Tracked['source']) => (s === 'Networking Tracker' ? src.networking.label : src.classmates.label) ?? s;
   const sources: Network['sources'] = [
     { name: graphSource, rows: g.people.filter((p) => !p.sources || p.sources.includes(graphSource)).length, sample: src.graph.sample },
     ...src.imports.map((i) => ({ ...i, sample: false })),
-    { name: 'Networking Tracker', rows: src.networking.rows.length, sample: src.networking.sample, skipped: !useTracker(src.networking) },
-    { name: 'Classmate Network', rows: src.classmates.rows.length, sample: src.classmates.sample, skipped: !useTracker(src.classmates) },
+    { name: trackerLabel('Networking Tracker'), rows: src.networking.rows.length, sample: src.networking.sample, skipped: !useTracker(src.networking) },
+    { name: trackerLabel('Classmate Network'), rows: src.classmates.rows.length, sample: src.classmates.sample, skipped: !useTracker(src.classmates) },
   ];
   const net = fromNetworkingTracker(useTracker(src.networking) ? src.networking.rows : []);
   const tracked = [...net.people, ...fromClassmateNetwork(useTracker(src.classmates) ? src.classmates.rows : [])];
@@ -337,14 +338,14 @@ export function buildNetwork(src: Sources): Network {
       org: t.org ?? prev?.org, role: t.role ?? prev?.role,
       notes: [prev?.notes, t.notes].filter(Boolean).join(' ') || undefined,
       contexts: [...new Set([...(prev?.contexts ?? []), ...ctxIds])],
-      sources: [...new Set([...(prev?.sources ?? []), t.source])],
+      sources: [...new Set([...(prev?.sources ?? []), trackerLabel(t.source)])],
       sample: (prev?.sample ?? true) && trackerSample,
     });
     t.mentions.forEach((name) => mentions.push({ from: t.id, name }));
   }
   for (const m of mentions) {
     const other = people.get(resolveId(m.name));
-    if (other && other.id !== m.from) links.push({ a: other.id, b: m.from, kind: 'intro', label: 'Named as warm path in Notion' });
+    if (other && other.id !== m.from) links.push({ a: other.id, b: m.from, kind: 'intro', label: `Named as a warm path in ${trackerLabel('Networking Tracker')}` });
   }
 
   // Encounters (Notion): who you've met, and "met together" links for small groups.

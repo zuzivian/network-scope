@@ -8,8 +8,8 @@ export function demoSources(): Sources {
   return {
     graph: { data: graph as GraphFile, sample: true },
     imports: [],
-    networking: { rows: networking as Record<string, unknown>[], sample: true },
-    classmates: { rows: classmates as Record<string, unknown>[], sample: true },
+    networking: { rows: networking as Record<string, unknown>[], sample: true, label: 'Outreach list' },
+    classmates: { rows: classmates as Record<string, unknown>[], sample: true, label: 'Classmate list' },
     encounters: [],
     rules: {
       aliases: {},
